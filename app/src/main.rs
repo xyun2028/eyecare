@@ -146,7 +146,7 @@ fn main() {
     }
 
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             let backend = WindowsBackend::new();
 
             // 上次如果是被强杀的，磁盘上会留着备份，先把屏幕救回来
@@ -171,6 +171,17 @@ fn main() {
             });
 
             apply_now(&app.state::<AppState>(), &cfg);
+
+            // 窗口在配置里是隐藏创建的，这里按启动方式决定要不要露出来。
+            // 必须在这一步就 show：Windows 不会给「从未显示过」的窗口分配任务栏按钮。
+            if let Some(window) = app.get_webview_window("main") {
+                if start_hidden {
+                    let _ = window.hide();
+                } else {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
 
             // ---- 托盘 ----
             let show = MenuItem::with_id(app, "show", "打开设置", true, None::<&str>)?;
@@ -290,13 +301,6 @@ fn main() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
-            }
-        })
-        .on_page_load(move |window, _payload| {
-            // 页面加载完再显示，避免先看到一块白屏
-            if !start_hidden {
-                let _ = window.show();
-                let _ = window.set_focus();
             }
         })
         .invoke_handler(tauri::generate_handler![

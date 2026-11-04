@@ -39,22 +39,32 @@ function presetName(id) {
 function renderStatus() {
   const c = S.config;
   const e = S.effective;
-  const parts = [];
+  const parts = [presetName(c.preset)];
 
-  parts.push(presetName(c.preset));
   if (!c.enabled) {
     parts.push("已暂停");
   } else if (e && e.kind === "kelvin") {
     parts.push(`${e.kelvin}K`);
-    if (c.schedule.enabled) parts.push("自动");
   } else if (e && e.kind === "rgb") {
     parts.push("滤色");
-    if (c.schedule.enabled) parts.push("自动");
   }
   if (c.brightness < 0.995) parts.push(`亮度 ${Math.round(c.brightness * 100)}%`);
   parts.push(`${S.displays.length} 块屏`);
 
   el("status").textContent = parts.join(" · ");
+
+  const mode = el("mode");
+  if (!c.enabled) {
+    mode.textContent = "已暂停";
+    mode.className = "pill off";
+  } else if (c.schedule.enabled) {
+    mode.textContent = "自动";
+    mode.className = "pill";
+  } else {
+    mode.textContent = "手动";
+    mode.className = "pill off";
+  }
+
   el("power").classList.toggle("on", c.enabled);
 
   const hdr = S.displays.some((d) => d.hdr === true);
@@ -68,8 +78,16 @@ function renderPresets() {
     const btn = document.createElement("button");
     btn.className = "preset" + (S.config.preset === p.id ? " active" : "");
     btn.title = p.hint;
-    btn.innerHTML = `<div class="swatch" style="background:${p.swatch}"></div>
-      <div class="preset-name">${p.name}</div>`;
+
+    const sw = document.createElement("span");
+    sw.className = "sw";
+    sw.style.background = `radial-gradient(circle at 32% 26%, rgba(255,255,255,.7) 0 16%, rgba(255,255,255,0) 58%), ${p.swatch}`;
+
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = p.name;
+
+    btn.append(sw, nm);
     btn.addEventListener("click", () => {
       S.config.preset = p.id;
       S.config.enabled = true;
@@ -83,7 +101,7 @@ function renderPresets() {
 function renderControls() {
   const c = S.config;
   el("kelvin").value = c.kelvin;
-  el("kelvinVal").textContent = `${c.kelvin}K`;
+  el("kelvinNum").textContent = c.kelvin;
   el("brightness").value = Math.round(c.brightness * 100);
   el("brightnessVal").textContent = `${Math.round(c.brightness * 100)}%`;
   if (c.color) el("color").value = rgbToHex(c.color);
@@ -126,8 +144,7 @@ function renderAll() {
 }
 
 async function pushNow() {
-  const next = await invoke("update_config", { cfg: S.config });
-  S = next;
+  S = await invoke("update_config", { cfg: S.config });
   renderStatus();
 }
 
@@ -147,7 +164,7 @@ function bindEvents() {
     S.config.kelvin = v;
     S.config.preset = "custom";
     S.config.color = null;
-    el("kelvinVal").textContent = `${v}K`;
+    el("kelvinNum").textContent = v;
     renderPresets();
     pushSoon();
   });
@@ -169,7 +186,6 @@ function bindEvents() {
 
   el("auto").addEventListener("change", (e) => {
     S.config.schedule.enabled = e.target.checked;
-    el("autoNote").classList.toggle("hidden", !e.target.checked);
     pushNow().then(renderAll);
   });
 

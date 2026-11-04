@@ -54,28 +54,44 @@ function render(size) {
   const W = size * SS;
   const buf = Buffer.alloc(W * W * 4);
   const c = W / 2;
-  const radius = W * 0.22;
-  const rOuter = W * 0.3;
-  const rInner = W * 0.17;
-  const rPupil = W * 0.075;
+  const radius = W * 0.23;
 
-  const bg = [0x16, 0x1a, 0x21];
-  const amber = [0xf0, 0xa4, 0x3a];
+  // 杏仁形眼型 = 两个大圆的交集
+  const lensR = W * 0.5;
+  const lensK = W * 0.335;
+  const irisR = W * 0.155;
+  const pupilR = W * 0.072;
+  const hiR = W * 0.03;
+
+  const bg = [0x12, 0x15, 0x1b];
+  const amber = [0xf2, 0xab, 0x47];
+  const iris = [0x8c, 0x51, 0x12];
+  const pupil = [0x14, 0x0d, 0x05];
+  const highlight = [0xff, 0xf2, 0xdc];
 
   for (let y = 0; y < W; y++) {
     for (let x = 0; x < W; x++) {
-      const dx = Math.max(Math.abs(x + 0.5 - c) - (W / 2 - radius), 0);
-      const dy = Math.max(Math.abs(y + 0.5 - c) - (W / 2 - radius), 0);
+      const px = x + 0.5;
+      const py = y + 0.5;
+
+      const dx = Math.max(Math.abs(px - c) - (W / 2 - radius), 0);
+      const dy = Math.max(Math.abs(py - c) - (W / 2 - radius), 0);
       const rectDist = Math.hypot(dx, dy) - radius;
 
-      const d = Math.hypot(x + 0.5 - c, y + 0.5 - c);
-      const inRing = d >= rInner && d <= rOuter;
-      const inPupil = d <= rPupil;
+      const inLens =
+        Math.hypot(px - c, py - (c - lensK)) <= lensR &&
+        Math.hypot(px - c, py - (c + lensK)) <= lensR;
+
+      const dCenter = Math.hypot(px - c, py - c);
+      const dHi = Math.hypot(px - (c - W * 0.042), py - (c - W * 0.042));
 
       // 1px 的软边缘，避免小尺寸下出现锯齿
       const alpha = Math.min(1, Math.max(0, 1 - rectDist));
       let color = bg;
-      if (inRing || inPupil) color = amber;
+      if (inLens) color = amber;
+      if (inLens && dCenter <= irisR) color = iris;
+      if (inLens && dCenter <= pupilR) color = pupil;
+      if (inLens && dHi <= hiR) color = highlight;
 
       const i = (y * W + x) * 4;
       buf[i] = color[0];

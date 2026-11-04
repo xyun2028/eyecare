@@ -1,12 +1,15 @@
 //! 极简截屏工具，输出 BMP。
 //!
 //! 存在的唯一目的：在没有图形依赖的环境里，把屏幕拍下来用于验证界面。
-//! 用法：screen-shot <输出路径>
+//!
+//! 用法：
+//!   screen-shot <输出路径>                 全屏
+//!   screen-shot <输出路径> <x> <y> <宽> <高>  只截一块区域
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::mem::zeroed;
-use std::ptr::{null_mut};
+use std::ptr::null_mut;
 
 use windows_sys::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
@@ -15,45 +18,60 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
 
 fn main() {
-    let out = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "shot.bmp".to_string());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let out = args.first().cloned().unwrap_or_else(|| "shot.bmp".to_string());
+
+    // 可选裁切区域：x y 宽 高
+    let crop: Option<(i32, i32, i32, i32)> = if args.len() >= 5 {
+        let nums: Vec<i32> = args[1..5]
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        if nums.len() == 4 {
+            Some((nums[0], nums[1], nums[2], nums[3]))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     unsafe {
-        let width = GetSystemMetrics(SM_CXSCREEN);
-        let height = GetSystemMetrics(SM_CYSCREEN);
-        if width <= 0 || height <= 0 {
+        let screen_w = GetSystemMetrics(SM_CXSCREEN);
+        let screen_h = GetSystemMetrics(SM_CYSCREEN);
+        if screen_w <= 0 || screen_h <= 0 {
             eprintln!("拿不到屏幕尺寸");
             return;
         }
 
         let screen: HDC = GetDC(null_mut());
         let mem: HDC = CreateCompatibleDC(screen);
-        let bitmap = CreateCompatibleBitmap(screen, width, height);
+        let bitmap = CreateCompatibleBitmap(screen, screen_w, screen_h);
         let old = SelectObject(mem, bitmap);
 
-        if BitBlt(mem, 0, 0, width, height, screen, 0, 0, SRCCOPY) == 0 {
+        if BitBlt(mem, 0, 0, screen_w, screen_h, screen, 0, 0, SRCCOPY) == 0 {
             eprintln!("抓取失败");
             return;
         }
 
         let mut info: BITMAPINFO = zeroed();
-        info.bmiHeader.biSize = std::mem::size_of::<windows_sys::Win32::Graphics::Gdi::BITMAPINFOHEADER>() as u32;
-        info.bmiHeader.biWidth = width;
-        info.bmiHeader.biHeight = -height;
+        info.bmiHeader.biSize =
+            std::mem::size_of::<windows_sys::Win32::Graphics::Gdi::BITMAPINFOHEADER>() as u32;
+        info.bmiHeader.biWidth = screen_w;
+        info.bmiHeader.biHeight = -screen_h;
         info.bmiHeader.biPlanes = 1;
         info.bmiHeader.biBitCount = 32;
         info.bmiHeader.biCompression = BI_RGB;
 
-        let stride = width as usize * 4;
-        let mut pixels = vec![0u8; stride * height as usize];
+        let full_stride = screen_w as usize * 4;
+        let mut full = vec![0u8; full_stride * screen_h as usize];
 
         let lines = GetDIBits(
             mem,
             bitmap,
             0,
-            height as u32,
-            pixels.as_mut_ptr() as *mut _,
+            screen_h as u32,
+            full.as_mut_ptr() as *mut _,
             &mut info,
             DIB_RGB_COLORS,
         );
@@ -68,7 +86,33 @@ fn main() {
             return;
         }
 
+        let (mut width, mut height) = (screen_w, screen_h);
+        let mut pixels = full;
+
+        if let Some((x, y, w, h)) = crop {
+            let x = x.max(0).min(screen_w);
+            let y = y.max(0).min(screen_h);
+            let w = w.min(screen_w - x);
+            let h = h.min(screen_h - y);
+            if w <= 0 || h <= 0 {
+                eprintln!("裁切区域无效");
+                return;
+            }
+
+            let mut cropped = vec![0u8; w as usize * 4 * h as usize];
+            for row in 0..h as usize {
+                let src = (y as usize + row) * full_stride + x as usize * 4;
+                let dst = row * w as usize * 4;
+                cropped[dst..dst + w as usize * 4]
+                    .copy_from_slice(&pixels[src..src + w as usize * 4]);
+            }
+            pixels = cropped;
+            width = w;
+            height = h;
+        }
+
         // GetDIBits 给的是自上而下的行序，BMP 文件要自下而上，这里翻一次
+        let stride = width as usize * 4;
         let mut rows: Vec<&[u8]> = pixels.chunks(stride).collect();
         rows.reverse();
         let mut flipped = Vec::with_capacity(pixels.len());
