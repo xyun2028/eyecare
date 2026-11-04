@@ -10,3 +10,7 @@
 # 系统杂项
 Thumbs.db
 .DS_Store
+
+# IDE 本地状态
+/.idea
+/.openidea
