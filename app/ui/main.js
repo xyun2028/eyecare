@@ -1,0 +1,240 @@
+const api = window.__TAURI__;
+const invoke = api ? api.core.invoke : null;
+const listen = api ? api.event.listen : null;
+
+let S = null;
+let pushTimer = null;
+
+const el = (id) => document.getElementById(id);
+
+function hexToRgb(hex) {
+  const v = hex.replace("#", "");
+  return [
+    parseInt(v.slice(0, 2), 16),
+    parseInt(v.slice(2, 4), 16),
+    parseInt(v.slice(4, 6), 16),
+  ];
+}
+
+function rgbToHex(rgb) {
+  return "#" + rgb.map((n) => n.toString(16).padStart(2, "0")).join("");
+}
+
+function toHHMM(minutes) {
+  const h = Math.floor(minutes / 60) % 24;
+  const m = Math.round(minutes % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function fromHHMM(text) {
+  const [h, m] = text.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function presetName(id) {
+  const p = S.presets.find((x) => x.id === id);
+  return p ? p.name : "自定义";
+}
+
+function renderStatus() {
+  const c = S.config;
+  const e = S.effective;
+  const parts = [];
+
+  parts.push(presetName(c.preset));
+  if (!c.enabled) {
+    parts.push("已暂停");
+  } else if (e && e.kind === "kelvin") {
+    parts.push(`${e.kelvin}K`);
+    if (c.schedule.enabled) parts.push("自动");
+  } else if (e && e.kind === "rgb") {
+    parts.push("滤色");
+    if (c.schedule.enabled) parts.push("自动");
+  }
+  if (c.brightness < 0.995) parts.push(`亮度 ${Math.round(c.brightness * 100)}%`);
+  parts.push(`${S.displays.length} 块屏`);
+
+  el("status").textContent = parts.join(" · ");
+  el("power").classList.toggle("on", c.enabled);
+
+  const hdr = S.displays.some((d) => d.hdr === true);
+  el("hdr-warn").classList.toggle("hidden", !hdr);
+}
+
+function renderPresets() {
+  const wrap = el("presets");
+  wrap.innerHTML = "";
+  for (const p of S.presets) {
+    const btn = document.createElement("button");
+    btn.className = "preset" + (S.config.preset === p.id ? " active" : "");
+    btn.title = p.hint;
+    btn.innerHTML = `<div class="swatch" style="background:${p.swatch}"></div>
+      <div class="preset-name">${p.name}</div>`;
+    btn.addEventListener("click", () => {
+      S.config.preset = p.id;
+      S.config.enabled = true;
+      if (p.kelvin != null) S.config.kelvin = p.kelvin;
+      pushNow().then(renderAll);
+    });
+    wrap.appendChild(btn);
+  }
+}
+
+function renderControls() {
+  const c = S.config;
+  el("kelvin").value = c.kelvin;
+  el("kelvinVal").textContent = `${c.kelvin}K`;
+  el("brightness").value = Math.round(c.brightness * 100);
+  el("brightnessVal").textContent = `${Math.round(c.brightness * 100)}%`;
+  if (c.color) el("color").value = rgbToHex(c.color);
+  el("autoNote").classList.toggle("hidden", !c.schedule.enabled);
+}
+
+function renderSchedule() {
+  const s = S.config.schedule;
+  el("auto").checked = s.enabled;
+  el("dayStart").value = toHHMM(s.day_start);
+  el("nightStart").value = toHHMM(s.night_start);
+  el("dayK").value = s.day_kelvin;
+  el("nightK").value = s.night_kelvin;
+  el("transition").value = s.transition;
+  el("autoNote").classList.toggle("hidden", !s.enabled);
+}
+
+function renderTargets() {
+  const sel = el("target");
+  sel.innerHTML = "";
+  const all = document.createElement("option");
+  all.value = "all";
+  all.textContent = `全部屏幕（${S.displays.length} 块）`;
+  sel.appendChild(all);
+  for (const d of S.displays) {
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = `${d.name} · ${d.width}×${d.height}${d.primary ? " · 主屏" : ""}`;
+    sel.appendChild(o);
+  }
+  sel.value = S.config.target;
+}
+
+function renderAll() {
+  renderStatus();
+  renderPresets();
+  renderControls();
+  renderSchedule();
+  renderTargets();
+}
+
+async function pushNow() {
+  const next = await invoke("update_config", { cfg: S.config });
+  S = next;
+  renderStatus();
+}
+
+function pushSoon() {
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushNow, 120);
+}
+
+function bindEvents() {
+  el("power").addEventListener("click", () => {
+    S.config.enabled = !S.config.enabled;
+    pushNow().then(renderAll);
+  });
+
+  el("kelvin").addEventListener("input", (e) => {
+    const v = Number(e.target.value);
+    S.config.kelvin = v;
+    S.config.preset = "custom";
+    S.config.color = null;
+    el("kelvinVal").textContent = `${v}K`;
+    renderPresets();
+    pushSoon();
+  });
+
+  el("brightness").addEventListener("input", (e) => {
+    const v = Number(e.target.value);
+    S.config.brightness = v / 100;
+    el("brightnessVal").textContent = `${v}%`;
+    pushSoon();
+  });
+
+  el("color").addEventListener("input", (e) => {
+    S.config.color = hexToRgb(e.target.value);
+    S.config.preset = "custom";
+    S.config.enabled = true;
+    renderPresets();
+    pushSoon();
+  });
+
+  el("auto").addEventListener("change", (e) => {
+    S.config.schedule.enabled = e.target.checked;
+    el("autoNote").classList.toggle("hidden", !e.target.checked);
+    pushNow().then(renderAll);
+  });
+
+  for (const [id, key] of [
+    ["dayK", "day_kelvin"],
+    ["nightK", "night_kelvin"],
+    ["transition", "transition"],
+  ]) {
+    el(id).addEventListener("change", (e) => {
+      S.config.schedule[key] = Number(e.target.value);
+      pushNow().then(renderStatus);
+    });
+  }
+
+  el("dayStart").addEventListener("change", (e) => {
+    S.config.schedule.day_start = fromHHMM(e.target.value);
+    pushNow().then(renderStatus);
+  });
+
+  el("nightStart").addEventListener("change", (e) => {
+    S.config.schedule.night_start = fromHHMM(e.target.value);
+    pushNow().then(renderStatus);
+  });
+
+  el("target").addEventListener("change", (e) => {
+    S.config.target = e.target.value;
+    pushNow();
+  });
+
+  el("autostart").addEventListener("change", async (e) => {
+    const want = e.target.checked;
+    // 以注册表实际写入结果为准，失败就把开关拨回去
+    const ok = await invoke("set_autostart", { on: want });
+    e.target.checked = ok;
+    if (!ok) el("autostart").title = "写入注册表失败";
+  });
+}
+
+async function boot() {
+  if (!invoke) {
+    el("status").textContent = "请从应用内打开";
+    return;
+  }
+
+  S = await invoke("bootstrap");
+  bindEvents();
+  renderAll();
+  el("autostart").checked = await invoke("get_autostart");
+
+  if (listen) {
+    await listen("config-changed", (event) => {
+      S = event.payload;
+      renderAll();
+    });
+    await listen("status", (event) => {
+      S = event.payload;
+      renderStatus();
+    });
+  }
+
+  setInterval(async () => {
+    if (!S || !S.config.schedule.enabled) return;
+    S = await invoke("bootstrap");
+    renderStatus();
+  }, 30000);
+}
+
+boot();

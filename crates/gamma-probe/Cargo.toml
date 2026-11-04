@@ -1,0 +1,9 @@
+[package]
+name = "gamma-probe"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+eyecare-core = { path = "../eyecare-core" }
+eyecare-win = { path = "../eyecare-win" }
+ctrlc = "3.4"

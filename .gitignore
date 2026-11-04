@@ -1,0 +1,12 @@
+# 编译产物
+/target
+
+# 工作区本地数据（含截屏、记忆日志），不进仓库
+/.workbuddy
+
+# Tauri 每次编译自动生成的 schema
+/app/gen
+
+# 系统杂项
+Thumbs.db
+.DS_Store

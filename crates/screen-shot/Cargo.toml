@@ -1,0 +1,11 @@
+[package]
+name = "screen-shot"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+] }

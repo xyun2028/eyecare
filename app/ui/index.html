@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>护眼</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="brand">
+        <div class="mark"></div>
+        <div class="brand-text">
+          <h1>护眼</h1>
+          <p id="status" class="sub">正在读取…</p>
+        </div>
+      </div>
+      <button id="power" class="power" title="开关护眼">
+        <span class="power-ring"></span>
+      </button>
+    </header>
+
+    <div id="hdr-warn" class="warn hidden">
+      检测到有屏幕开启了 HDR，那块屏上色温调整不会生效。
+    </div>
+
+    <section class="card">
+      <h2>预设</h2>
+      <div id="presets" class="presets"></div>
+    </section>
+
+    <section class="card">
+      <h2>自定义</h2>
+      <p id="autoNote" class="hint hidden">
+        自动模式已接管色温，这里的色温暂不生效；亮度仍然有效。
+      </p>
+      <div class="row">
+        <label for="kelvin">色温</label>
+        <input id="kelvin" type="range" min="1000" max="6500" step="50" />
+        <span id="kelvinVal" class="val">4500K</span>
+      </div>
+      <div class="row">
+        <label for="brightness">亮度</label>
+        <input id="brightness" type="range" min="20" max="100" step="1" />
+        <span id="brightnessVal" class="val">100%</span>
+      </div>
+      <div class="row">
+        <label for="color">颜色</label>
+        <input id="color" type="color" value="#c7edcc" />
+        <span class="val muted">取色即生效</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>按时间自动</h2>
+        <label class="switch">
+          <input id="auto" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="schedule">
+        <div class="row">
+          <label for="dayStart">白天</label>
+          <input id="dayStart" type="time" value="07:00" />
+          <input id="dayK" class="num" type="number" min="1000" max="6500" step="100" />
+          <span class="unit">K</span>
+        </div>
+        <div class="row">
+          <label for="nightStart">夜间</label>
+          <input id="nightStart" type="time" value="19:00" />
+          <input id="nightK" class="num" type="number" min="1000" max="6500" step="100" />
+          <span class="unit">K</span>
+        </div>
+        <p class="hint">
+          切换前后 <input id="transition" class="num small" type="number" min="0" max="180" step="10" /> 分钟内平滑过渡
+        </p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>应用到</h2>
+        <select id="target"></select>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>开机自启</h2>
+        <label class="switch">
+          <input id="autostart" type="checkbox" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="hint">开机后静默进入托盘，不弹窗口。</p>
+    </section>
+
+    <footer class="foot">
+      关闭窗口会缩回托盘，右键托盘图标可以快速切换。
+    </footer>
+
+    <script src="main.js"></script>
+  </body>
+</html>
