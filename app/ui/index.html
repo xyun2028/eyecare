@@ -7,10 +7,11 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header class="head">
+    <header class="top">
       <div class="brand">
         <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
           <rect width="32" height="32" rx="9" fill="#1a1f27" />
+          <rect x="0.5" y="0.5" width="31" height="31" rx="8.5" fill="none" stroke="#2b323d" />
           <path d="M4 16 C8 8.5, 24 8.5, 28 16 C24 23.5, 8 23.5, 4 16 Z" fill="#f2ab47" />
           <circle cx="16" cy="16" r="4.6" fill="#8c5112" />
           <circle cx="16" cy="16" r="2.2" fill="#140d05" />
@@ -21,118 +22,122 @@
             <h1>护眼</h1>
             <span id="mode" class="pill">手动</span>
           </div>
-          <p id="status" class="sub">正在读取…</p>
+          <p class="sub">Gamma 调节 · 逐屏独立</p>
         </div>
       </div>
-      <button id="power" class="power" title="开关护眼" aria-label="开关护眼">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
-          <path
-            d="M6.5 6.5a8 8 0 1 0 11 0"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            fill="none"
-          />
-        </svg>
-      </button>
+
+      <div class="top-right">
+        <span id="status" class="status">正在读取…</span>
+        <button id="power" class="power" title="开关护眼" aria-label="开关护眼">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+            <path
+              d="M6.5 6.5a8 8 0 1 0 11 0"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              fill="none"
+            />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <div id="hdr-warn" class="warn hidden">
       检测到有屏幕开启了 HDR，那块屏上色温调整不会生效。
     </div>
 
-    <main>
-      <section class="card hero">
-        <div class="hero-top">
-          <span class="label">色温</span>
-          <span class="big"><span id="kelvinNum">4500</span><i>K</i></span>
-        </div>
-        <input id="kelvin" class="range-temp" type="range" min="1000" max="6500" step="50" />
-        <div class="scale">
-          <span>1000 · 暖</span>
-          <span>6500 · 中性</span>
-        </div>
+    <div class="body">
+      <aside class="side">
+        <div class="side-label">预设</div>
+        <div id="presets" class="preset-list"></div>
+      </aside>
 
-        <div class="divider"></div>
-
-        <div class="row">
-          <label for="brightness">亮度</label>
-          <input id="brightness" class="range-dim" type="range" min="20" max="100" />
-          <span id="brightnessVal" class="val">100%</span>
-        </div>
-        <div class="row">
-          <label for="color">颜色</label>
-          <input id="color" type="color" value="#c7edcc" />
-          <span class="val muted">取色即生效</span>
-        </div>
-
-        <p id="autoNote" class="hint hidden">
-          自动模式已接管色温，上面的色温暂不生效；亮度仍然有效。
-        </p>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>预设</h2>
-        </div>
-        <div id="presets" class="presets"></div>
-      </section>
-
-      <section class="card">
-        <div class="card-head">
-          <h2>按时间自动</h2>
-          <label class="switch">
-            <input id="auto" type="checkbox" />
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="schedule">
-          <div class="time-row">
-            <span class="dot day"></span>
-            <span class="time-label">白天</span>
-            <input id="dayStart" type="time" value="07:00" />
-            <input id="dayK" class="num" type="number" min="1000" max="6500" step="100" />
-            <span class="unit">K</span>
+      <main class="main">
+        <section class="hero">
+          <div class="hero-head">
+            <span class="label">色温</span>
+            <span class="big"><span id="kelvinNum">4500</span><i>K</i></span>
           </div>
-          <div class="time-row">
-            <span class="dot night"></span>
-            <span class="time-label">夜间</span>
-            <input id="nightStart" type="time" value="19:00" />
-            <input id="nightK" class="num" type="number" min="1000" max="6500" step="100" />
-            <span class="unit">K</span>
+          <input id="kelvin" class="range-temp" type="range" min="1000" max="6500" step="50" />
+          <div class="scale">
+            <span>1000 · 暖</span>
+            <span>6500 · 中性</span>
           </div>
-          <p class="hint">
-            切换前后
-            <input id="transition" class="num small" type="number" min="0" max="180" step="10" />
-            分钟内平滑过渡
+
+          <div class="rows">
+            <div class="row">
+              <label for="brightness">亮度</label>
+              <input id="brightness" class="range-dim" type="range" min="20" max="100" />
+              <span id="brightnessVal" class="val">100%</span>
+            </div>
+            <div class="row">
+              <label for="color">颜色</label>
+              <input id="color" type="color" value="#c7edcc" />
+              <span class="val muted">取色即生效，会切到自定义</span>
+            </div>
+          </div>
+
+          <p id="autoNote" class="hint hidden">
+            自动模式已接管色温，上面的色温暂不生效；亮度仍然有效。
           </p>
-        </div>
-      </section>
+        </section>
 
-      <section class="card">
-        <div class="card-head">
-          <h2>输出</h2>
-        </div>
-        <div class="row">
-          <label for="target">应用</label>
-          <select id="target"></select>
-        </div>
-        <div class="divider soft"></div>
-        <div class="switch-row">
-          <div class="switch-text">
-            <div class="switch-title">开机自启</div>
-            <div class="switch-desc">静默进入托盘，不弹窗口</div>
-          </div>
-          <label class="switch">
-            <input id="autostart" type="checkbox" />
-            <span class="slider"></span>
-          </label>
-        </div>
-      </section>
-    </main>
+        <div class="grid2">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>按时间自动</h2>
+              <label class="switch">
+                <input id="auto" type="checkbox" />
+                <span class="slider"></span>
+              </label>
+            </div>
 
-    <footer class="foot">关闭窗口会缩回托盘，右键托盘图标可以快速切换</footer>
+            <div class="time-row">
+              <span class="dot day"></span>
+              <span class="time-label">白天</span>
+              <input id="dayStart" type="time" value="07:00" />
+              <input id="dayK" class="num" type="number" min="1000" max="6500" step="100" />
+              <span class="unit">K</span>
+            </div>
+            <div class="time-row">
+              <span class="dot night"></span>
+              <span class="time-label">夜间</span>
+              <input id="nightStart" type="time" value="19:00" />
+              <input id="nightK" class="num" type="number" min="1000" max="6500" step="100" />
+              <span class="unit">K</span>
+            </div>
+            <p class="hint">
+              切换前后 <input id="transition" class="num small" type="number" min="0" max="180" step="10" /> 分钟内过渡
+            </p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>输出</h2>
+            </div>
+
+            <div class="field">
+              <label for="target">应用到</label>
+              <select id="target"></select>
+            </div>
+
+            <div class="switch-row">
+              <div class="switch-text">
+                <div class="switch-title">开机自启</div>
+                <div class="switch-desc">静默进入托盘</div>
+              </div>
+              <label class="switch">
+                <input id="autostart" type="checkbox" />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <p class="foot">关闭窗口会缩回托盘，右键托盘图标可以快速切换</p>
+      </main>
+    </div>
 
     <script src="main.js"></script>
   </body>

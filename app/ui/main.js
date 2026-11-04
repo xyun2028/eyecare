@@ -76,7 +76,7 @@ function renderPresets() {
   wrap.innerHTML = "";
   for (const p of S.presets) {
     const btn = document.createElement("button");
-    btn.className = "preset" + (S.config.preset === p.id ? " active" : "");
+    btn.className = "p-item" + (S.config.preset === p.id ? " active" : "");
     btn.title = p.hint;
 
     const sw = document.createElement("span");
@@ -84,10 +84,14 @@ function renderPresets() {
     sw.style.background = `radial-gradient(circle at 32% 26%, rgba(255,255,255,.7) 0 16%, rgba(255,255,255,0) 58%), ${p.swatch}`;
 
     const nm = document.createElement("span");
-    nm.className = "nm";
+    nm.className = "p-name";
     nm.textContent = p.name;
 
-    btn.append(sw, nm);
+    const val = document.createElement("span");
+    val.className = "p-val";
+    val.textContent = p.kelvin != null ? `${p.kelvin}K` : "滤色";
+
+    btn.append(sw, nm, val);
     btn.addEventListener("click", () => {
       S.config.preset = p.id;
       S.config.enabled = true;
