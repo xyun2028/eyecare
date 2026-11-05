@@ -158,6 +158,17 @@ fn update_config(
     status_of(&state, safe)
 }
 
+/// 把之前移出列表的内置预设全部找回来。用户自己存的预设不受影响。
+#[tauri::command]
+fn restore_presets(app: tauri::AppHandle, state: tauri::State<AppState>) -> Status {
+    let mut cfg = state.config.lock().unwrap().clone();
+    cfg.hidden_presets.clear();
+    cfg.save();
+    *state.config.lock().unwrap() = cfg.clone();
+    refresh_tray_menu(&app, &cfg);
+    status_of(&state, cfg)
+}
+
 #[tauri::command]
 fn get_autostart() -> bool {
     eyecare_win::autostart::is_enabled(APP_NAME)
@@ -449,6 +460,7 @@ fn main() {
             update_config,
             save_preset,
             delete_preset,
+            restore_presets,
             get_autostart,
             set_autostart
         ])

@@ -261,11 +261,33 @@ h1 {
   transition: background 0.2s;
 }
 
-.side-label {
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0 10px 8px;
+}
+
+.side-label {
   font-size: 10.5px;
   letter-spacing: 1.2px;
   color: var(--label);
+}
+
+.mini-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.14s;
+}
+
+.mini-btn:hover {
+  color: var(--accent);
 }
 
 .preset-list {

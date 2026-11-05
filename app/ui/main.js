@@ -154,6 +154,10 @@ function renderPresets() {
   add.title = "把当前生效的颜色存成一个预设";
   add.addEventListener("click", showPresetForm);
   wrap.appendChild(add);
+
+  // 只有确实移出过内置预设，才显示「恢复默认」
+  const hiddenCount = (S.config.hidden_presets || []).length;
+  el("restorePresets").classList.toggle("hidden", hiddenCount === 0);
 }
 
 function suggestName() {
@@ -340,8 +344,12 @@ function bindEvents() {
     if (!ok) el("autostart").title = "写入注册表失败";
   });
 
-  el("theme").addEventListener("click", () => {
-    const cur = S.config.theme || "system";
+  el("restorePresets").addEventListener("click", async () => {
+    S = await invoke("restore_presets");
+    renderAll();
+  });
+
+  el("theme").addEventListener("click", () => {    const cur = S.config.theme || "system";
     const next = THEME_ORDER[(THEME_ORDER.indexOf(cur) + 1) % THEME_ORDER.length];
     S.config.theme = next;
     applyTheme();
