@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
-const BRAND = [47, 111, 235]; // #2F6FEB
+const BRAND = [82, 192, 133]; // #52C085 浅绿
 const INK = [255, 255, 255];
 
 const MARK_MAIN = [
