@@ -95,13 +95,30 @@ function renderStatus() {
   el("hdr-warn").classList.toggle("hidden", !hdr);
 }
 
+function selectPreset(p) {
+  S.config.preset = p.id;
+  S.config.enabled = true;
+  if (p.kelvin != null) S.config.kelvin = p.kelvin;
+  pushNow().then(renderAll);
+}
+
 function renderPresets() {
   const wrap = el("presets");
   wrap.innerHTML = "";
+
   for (const p of S.presets) {
-    const btn = document.createElement("button");
-    btn.className = "p-item" + (S.config.preset === p.id ? " active" : "");
-    btn.title = p.hint;
+    const row = document.createElement("div");
+    row.className = "p-item" + (S.config.preset === p.id ? " active" : "");
+    row.title = p.hint;
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.addEventListener("click", () => selectPreset(p));
+    row.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        selectPreset(p);
+      }
+    });
 
     const sw = document.createElement("span");
     sw.className = "sw";
@@ -115,15 +132,86 @@ function renderPresets() {
     val.className = "p-val";
     val.textContent = p.kelvin != null ? `${p.kelvin}K` : "滤色";
 
-    btn.append(sw, nm, val);
-    btn.addEventListener("click", () => {
-      S.config.preset = p.id;
-      S.config.enabled = true;
-      if (p.kelvin != null) S.config.kelvin = p.kelvin;
-      pushNow().then(renderAll);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "p-del";
+    del.textContent = "×";
+    del.title = "移出预设";
+    del.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      S = await invoke("delete_preset", { id: p.id });
+      renderAll();
     });
-    wrap.appendChild(btn);
+
+    row.append(sw, nm, val, del);
+    wrap.appendChild(row);
   }
+
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "p-add";
+  add.textContent = "＋ 保存当前颜色";
+  add.title = "把当前生效的颜色存成一个预设";
+  add.addEventListener("click", showPresetForm);
+  wrap.appendChild(add);
+}
+
+function suggestName() {
+  const e = S.effective;
+  if (!S.config.enabled || !e) return "我的预设";
+  return e.kind === "kelvin" ? `${e.kelvin}K` : "我的颜色";
+}
+
+function showPresetForm() {
+  const wrap = el("presets");
+  const existing = wrap.querySelector(".p-form");
+  if (existing) {
+    existing.querySelector("input").focus();
+    return;
+  }
+
+  const form = document.createElement("div");
+  form.className = "p-form";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 12;
+  input.placeholder = "预设名称";
+  input.value = suggestName();
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "primary";
+  save.textContent = "保存";
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "取消";
+
+  const submit = async () => {
+    const name = input.value.trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+    S = await invoke("save_preset", { name });
+    renderAll();
+  };
+
+  save.addEventListener("click", submit);
+  cancel.addEventListener("click", () => form.remove());
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+    if (e.key === "Escape") form.remove();
+  });
+
+  form.append(input, save, cancel);
+  wrap.appendChild(form);
+  input.focus();
+  input.select();
 }
 
 function renderControls() {

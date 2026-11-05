@@ -86,6 +86,12 @@ pub struct Config {
     /// 界面主题："system" / "light" / "dark"
     #[serde(default = "default_theme")]
     pub theme: String,
+    /// 用户自己保存的预设
+    #[serde(default)]
+    pub extra_presets: Vec<Preset>,
+    /// 被用户移出列表的内置预设 id
+    #[serde(default)]
+    pub hidden_presets: Vec<String>,
     pub schedule: Schedule,
 }
 
@@ -103,6 +109,8 @@ impl Default for Config {
             color: None,
             target: "all".to_string(),
             theme: default_theme(),
+            extra_presets: Vec::new(),
+            hidden_presets: Vec::new(),
             schedule: Schedule::default(),
         }
     }
@@ -134,77 +142,105 @@ impl Config {
     }
 }
 
-/// 界面上的一张预设卡片。
-#[derive(Debug, Clone, Serialize)]
+/// 一个预设：要么记色温，要么记一个具体颜色。
+/// 字段改成 String 是为了支持用户自己新建和命名。
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Preset {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub hint: &'static str,
+    pub id: String,
+    pub name: String,
+    pub hint: String,
     pub kelvin: Option<u32>,
     pub color: Option<[u8; 3]>,
-    /// 卡片上用来示意效果的颜色
-    pub swatch: &'static str,
+    /// 列表里用来示意效果的颜色
+    pub swatch: String,
 }
 
-pub fn presets() -> Vec<Preset> {
+fn p(
+    id: &str,
+    name: &str,
+    hint: &str,
+    kelvin: Option<u32>,
+    color: Option<[u8; 3]>,
+    swatch: &str,
+) -> Preset {
+    Preset {
+        id: id.to_string(),
+        name: name.to_string(),
+        hint: hint.to_string(),
+        kelvin,
+        color,
+        swatch: swatch.to_string(),
+    }
+}
+
+/// 内置预设。用户可以把它移出列表，但定义始终保留，以后还能恢复。
+pub fn builtin_presets() -> Vec<Preset> {
     vec![
-        Preset {
-            id: "off",
-            name: "原色",
-            hint: "不做任何调整",
-            kelvin: Some(6500),
-            color: None,
-            swatch: "#d7e2f4",
-        },
-        Preset {
-            id: "soft",
-            name: "轻度",
-            hint: "轻微偏暖",
-            kelvin: Some(5500),
-            color: None,
-            swatch: "#f5e3c8",
-        },
-        Preset {
-            id: "office",
-            name: "办公",
-            hint: "长时间写代码",
-            kelvin: Some(4500),
-            color: None,
-            swatch: "#ffd096",
-        },
-        Preset {
-            id: "night",
-            name: "夜间",
-            hint: "晚上看屏幕",
-            kelvin: Some(3400),
-            color: None,
-            swatch: "#ffb173",
-        },
-        Preset {
-            id: "sleep",
-            name: "睡前",
-            hint: "睡前半小时",
-            kelvin: Some(2700),
-            color: None,
-            swatch: "#ff8f4f",
-        },
-        Preset {
-            id: "green",
-            name: "豆沙绿",
-            hint: "老式护眼绿",
-            kelvin: None,
-            color: Some([199, 237, 204]),
-            swatch: "#a9ddb7",
-        },
-        Preset {
-            id: "paper",
-            name: "纸质暖黄",
-            hint: "看文档不刺眼",
-            kelvin: None,
-            color: Some([250, 235, 210]),
-            swatch: "#f0d29f",
-        },
+        p("off", "原色", "不做任何调整", Some(6500), None, "#d7e2f4"),
+        p("soft", "轻度", "轻微偏暖", Some(5500), None, "#f5e3c8"),
+        p("office", "办公", "长时间写代码", Some(4500), None, "#ffd096"),
+        p("night", "夜间", "晚上看屏幕", Some(3400), None, "#ffb173"),
+        p("sleep", "睡前", "睡前半小时", Some(2700), None, "#ff8f4f"),
+        p(
+            "green",
+            "豆沙绿",
+            "老式护眼绿",
+            None,
+            Some([199, 237, 204]),
+            "#a9ddb7",
+        ),
+        p(
+            "paper",
+            "纸质暖黄",
+            "看文档不刺眼",
+            None,
+            Some([250, 235, 210]),
+            "#f0d29f",
+        ),
     ]
+}
+
+/// 界面上实际看到的列表：内置里没被隐藏的，加上用户自己保存的。
+pub fn presets_for(cfg: &Config) -> Vec<Preset> {
+    let mut all: Vec<Preset> = builtin_presets()
+        .into_iter()
+        .filter(|item| !cfg.hidden_presets.iter().any(|id| id == &item.id))
+        .collect();
+    all.extend(cfg.extra_presets.iter().cloned());
+    all
+}
+
+pub fn find_preset(cfg: &Config, id: &str) -> Option<Preset> {
+    presets_for(cfg).into_iter().find(|item| item.id == id)
+}
+
+/// 色温换算成示意色，新建预设时用它生成小圆点。
+pub fn swatch_for_kelvin(kelvin: u32) -> String {
+    const STOPS: [(u32, [u8; 3]); 5] = [
+        (2700, [0xff, 0x8f, 0x4f]),
+        (3400, [0xff, 0xb1, 0x73]),
+        (4500, [0xff, 0xd0, 0x96]),
+        (5500, [0xf5, 0xe3, 0xc8]),
+        (6500, [0xd7, 0xe2, 0xf4]),
+    ];
+
+    let k = kelvin.clamp(2700, 6500);
+    for pair in STOPS.windows(2) {
+        let (lo_k, lo_c) = pair[0];
+        let (hi_k, hi_c) = pair[1];
+        if k <= hi_k {
+            let t = (k - lo_k) as f64 / (hi_k - lo_k) as f64;
+            let mix = |i: usize| {
+                (lo_c[i] as f64 + (hi_c[i] as f64 - lo_c[i] as f64) * t).round() as u8
+            };
+            return format!("#{:02x}{:02x}{:02x}", mix(0), mix(1), mix(2));
+        }
+    }
+    "#d7e2f4".to_string()
+}
+
+pub fn swatch_for_rgb(rgb: [u8; 3]) -> String {
+    format!("#{:02x}{:02x}{:02x}", rgb[0], rgb[1], rgb[2])
 }
 
 /// 最终要下发给屏幕的东西：要么是色温，要么是一个具体的颜色。
@@ -235,11 +271,11 @@ pub fn resolve(cfg: &Config, minutes: f64) -> Option<Tint> {
         });
     }
 
-    if let Some(p) = presets().into_iter().find(|p| p.id == cfg.preset) {
-        if let Some(rgb) = p.color {
+    if let Some(item) = find_preset(cfg, &cfg.preset) {
+        if let Some(rgb) = item.color {
             return Some(Tint::Rgb { rgb });
         }
-        if let Some(kelvin) = p.kelvin {
+        if let Some(kelvin) = item.kelvin {
             return Some(Tint::Kelvin { kelvin });
         }
     }
@@ -302,5 +338,40 @@ mod tests {
             Some(Tint::Rgb { rgb }) => assert_eq!(rgb, [199, 237, 204]),
             other => panic!("应该是自选颜色，实际 {other:?}"),
         }
+    }
+
+    #[test]
+    fn 用户预设追加在列表末尾并能生效() {
+        let mut cfg = Config::default();
+        cfg.extra_presets
+            .push(p("u1", "我的", "自己保存的", Some(5000), None, "#ffd0a0"));
+
+        let list = presets_for(&cfg);
+        assert_eq!(list.last().unwrap().id, "u1");
+
+        cfg.preset = "u1".to_string();
+        match resolve(&cfg, 12.0 * 60.0) {
+            Some(Tint::Kelvin { kelvin }) => assert_eq!(kelvin, 5000),
+            other => panic!("用户预设应该生效，实际 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn 移出的内置预设不再出现在列表里() {
+        let mut cfg = Config::default();
+        cfg.hidden_presets.push("night".to_string());
+
+        let list = presets_for(&cfg);
+        assert!(list.iter().all(|item| item.id != "night"));
+        // 其它内置预设不受影响
+        assert!(list.iter().any(|item| item.id == "office"));
+    }
+
+    #[test]
+    fn 色温示意色在两端对齐预设配色() {
+        assert_eq!(swatch_for_kelvin(6500), "#d7e2f4");
+        assert_eq!(swatch_for_kelvin(2700), "#ff8f4f");
+        // 越界也不应崩，夹到端点
+        assert_eq!(swatch_for_kelvin(500), "#ff8f4f");
     }
 }

@@ -6,7 +6,10 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use config::{presets, resolve, Config, Preset, Tint};
+use config::{
+    builtin_presets, find_preset, presets_for, resolve, swatch_for_kelvin, swatch_for_rgb, Config,
+    Preset, Tint,
+};
 use eyecare_core::display::{
     clear_state, default_state_path, load_state, restore_all, save_state, snapshot,
 };
@@ -44,9 +47,10 @@ fn clock_text() -> String {
 
 fn status_of(state: &AppState, cfg: Config) -> Status {
     let effective = resolve(&cfg, config::minutes_now());
+    let visible = presets_for(&cfg);
     Status {
         config: cfg,
-        presets: presets(),
+        presets: visible,
         displays: state.backend.list(),
         effective,
         clock: clock_text(),
@@ -159,6 +163,87 @@ fn get_autostart() -> bool {
     eyecare_win::autostart::is_enabled(APP_NAME)
 }
 
+/// 把「当前生效的颜色」存成一个具名预设。
+/// 自动模式开着的时候，存的是此刻自动算出来的那个色温。
+#[tauri::command]
+fn save_preset(app: tauri::AppHandle, state: tauri::State<AppState>, name: String) -> Status {
+    let mut cfg = state.config.lock().unwrap().clone();
+
+    let (kelvin, color, swatch) = match resolve(&cfg, config::minutes_now()) {
+        Some(Tint::Kelvin { kelvin }) => (Some(kelvin), None, swatch_for_kelvin(kelvin)),
+        Some(Tint::Rgb { rgb }) => (None, Some(rgb), swatch_for_rgb(rgb)),
+        None => (Some(cfg.kelvin), None, swatch_for_kelvin(cfg.kelvin)),
+    };
+
+    let trimmed: String = name.trim().chars().take(12).collect();
+    let label = if trimmed.is_empty() {
+        "未命名".to_string()
+    } else {
+        trimmed
+    };
+
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let id = format!("u{stamp}");
+
+    cfg.extra_presets.push(Preset {
+        id: id.clone(),
+        name: label,
+        hint: "自己保存的".to_string(),
+        kelvin,
+        color,
+        swatch,
+    });
+    cfg.preset = id;
+    cfg.enabled = true;
+
+    cfg.save();
+    *state.config.lock().unwrap() = cfg.clone();
+    apply_now(&state, &cfg);
+    refresh_tray_menu(&app, &cfg);
+    status_of(&state, cfg)
+}
+
+/// 把预设移出列表。内置的只记进隐藏名单，定义还在，以后能恢复。
+/// 如果移掉的正是当前在用的，效果不撤销，只是转成「自定义」——
+/// 否则用户点一下删除，屏幕会突然跳回原色。
+#[tauri::command]
+fn delete_preset(app: tauri::AppHandle, state: tauri::State<AppState>, id: String) -> Status {
+    let mut cfg = state.config.lock().unwrap().clone();
+    let removed = find_preset(&cfg, &id);
+    let was_active = cfg.preset == id;
+
+    if builtin_presets().iter().any(|item| item.id == id) {
+        if !cfg.hidden_presets.iter().any(|x| x == &id) {
+            cfg.hidden_presets.push(id.clone());
+        }
+    } else {
+        cfg.extra_presets.retain(|item| item.id != id);
+    }
+
+    if was_active {
+        cfg.preset = config::PRESET_CUSTOM.to_string();
+        if let Some(item) = removed {
+            match (item.kelvin, item.color) {
+                (_, Some(rgb)) => cfg.color = Some(rgb),
+                (Some(kelvin), None) => {
+                    cfg.kelvin = kelvin;
+                    cfg.color = None;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    cfg.save();
+    *state.config.lock().unwrap() = cfg.clone();
+    apply_now(&state, &cfg);
+    refresh_tray_menu(&app, &cfg);
+    status_of(&state, cfg)
+}
+
 /// 开：把「当前 exe 路径 + --hidden」写进注册表。
 /// 关：删掉那个值。返回值代表注册表里真实的结果，不是我们想设的值。
 #[tauri::command]
@@ -173,6 +258,51 @@ fn set_autostart(on: bool) -> bool {
         }
     } else {
         eyecare_win::autostart::set_enabled(APP_NAME, None)
+    }
+}
+
+/// 托盘菜单要跟着预设列表走，所以抽成函数，增删预设后重建一次。
+fn build_tray_menu(app: &tauri::AppHandle, cfg: &Config) -> tauri::Result<Menu<tauri::Wry>> {
+    let show = MenuItem::with_id(app, "show", "打开设置", true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle", "暂停 / 恢复", true, None::<&str>)?;
+
+    let preset_items: Vec<MenuItem<tauri::Wry>> = presets_for(cfg)
+        .iter()
+        .map(|item| {
+            MenuItem::with_id(
+                app,
+                format!("preset:{}", item.id),
+                item.name.as_str(),
+                true,
+                None::<&str>,
+            )
+            .unwrap()
+        })
+        .collect();
+    let preset_refs: Vec<&dyn IsMenuItem<tauri::Wry>> = preset_items
+        .iter()
+        .map(|item| item as &dyn IsMenuItem<tauri::Wry>)
+        .collect();
+    let preset_menu = Submenu::with_items(app, "预设", true, &preset_refs)?;
+
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    Menu::with_items(
+        app,
+        &[
+            &show,
+            &toggle,
+            &preset_menu,
+            &PredefinedMenuItem::separator(app)?,
+            &quit,
+        ],
+    )
+}
+
+fn refresh_tray_menu(app: &tauri::AppHandle, cfg: &Config) {
+    if let Some(tray) = app.tray_by_id("main") {
+        if let Ok(menu) = build_tray_menu(app, cfg) {
+            let _ = tray.set_menu(Some(menu));
+        }
     }
 }
 
@@ -227,39 +357,7 @@ fn main() {
             }
 
             // ---- 托盘 ----
-            let show = MenuItem::with_id(app, "show", "打开设置", true, None::<&str>)?;
-            let toggle = MenuItem::with_id(app, "toggle", "暂停 / 恢复", true, None::<&str>)?;
-
-            let preset_items: Vec<MenuItem<tauri::Wry>> = presets()
-                .iter()
-                .map(|p| {
-                    MenuItem::with_id(
-                        app,
-                        format!("preset:{}", p.id),
-                        p.name,
-                        true,
-                        None::<&str>,
-                    )
-                    .unwrap()
-                })
-                .collect();
-            let preset_refs: Vec<&dyn IsMenuItem<tauri::Wry>> = preset_items
-                .iter()
-                .map(|i| i as &dyn IsMenuItem<tauri::Wry>)
-                .collect();
-            let preset_menu = Submenu::with_items(app, "预设", true, &preset_refs)?;
-
-            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(
-                app,
-                &[
-                    &show,
-                    &toggle,
-                    &preset_menu,
-                    &PredefinedMenuItem::separator(app)?,
-                    &quit,
-                ],
-            )?;
+            let menu = build_tray_menu(app.handle(), &cfg)?;
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -349,6 +447,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             bootstrap,
             update_config,
+            save_preset,
+            delete_preset,
             get_autostart,
             set_autostart
         ])
