@@ -48,7 +48,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     if args.first().map(|s| s.as_str()) == Some("--rect") {
-        let title = args.get(1).cloned().unwrap_or_else(|| "护眼 · eyecare".to_string());
+        let title = args.get(1).cloned().unwrap_or_else(|| "Eye眼".to_string());
         print_rect(&title);
         return;
     }

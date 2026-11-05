@@ -765,6 +765,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "eyecare-watchdog"
+version = "0.1.0"
+dependencies = [
+ "eyecare-core",
+ "eyecare-win",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "eyecare-win"
 version = "0.1.0"
 dependencies = [

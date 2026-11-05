@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "eyecare",
+  "productName": "Eye眼",
   "version": "0.1.0",
   "identifier": "com.anjun.eyecare",
   "build": {
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "护眼 · eyecare",
+        "title": "Eye眼",
         "width": 880,
         "height": 488,
         "visible": false,

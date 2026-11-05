@@ -1,0 +1,12 @@
+[package]
+name = "eyecare-watchdog"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+eyecare-core = { path = "../eyecare-core" }
+eyecare-win = { path = "../eyecare-win" }
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }

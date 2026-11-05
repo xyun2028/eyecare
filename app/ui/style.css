@@ -23,6 +23,7 @@
   --accent: #f2ab47;
   --accent-soft: rgba(242, 171, 71, 0.12);
   --accent-line: rgba(242, 171, 71, 0.25);
+  --brand: #2f6feb;
   --warn-text: #dcbe8c;
   --warn-bg: rgba(242, 171, 71, 0.07);
 }
@@ -124,6 +125,7 @@ body {
   flex: none;
   border-radius: 9px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  color: var(--brand);
 }
 
 .titles {

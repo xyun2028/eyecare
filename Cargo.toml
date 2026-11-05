@@ -5,6 +5,7 @@ members = [
     "crates/eyecare-win",
     "crates/gamma-probe",
     "crates/screen-shot",
+    "crates/eyecare-watchdog",
     "app",
 ]
 

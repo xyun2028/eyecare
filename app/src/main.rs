@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![windows_subsystem = "windows"]
 
 mod config;
 
@@ -25,7 +25,7 @@ struct AppState {
 }
 
 const APP_NAME: &str = "eyecare";
-const WINDOW_TITLE: &str = "护眼 · eyecare";
+const WINDOW_TITLE: &str = "Eye眼";
 
 #[derive(Clone, serde::Serialize)]
 struct Status {
@@ -87,11 +87,34 @@ fn apply_now(state: &AppState, cfg: &Config) {
     }
 }
 
+/// 拉起看门狗。它只等主进程退出，发现备份还在就把屏幕写回原样。
+/// 没有它的话，任务管理器一结束进程，屏幕就永远停在偏色状态。
+fn spawn_watchdog(state_path: &std::path::Path) {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let Some(dir) = exe.parent() else {
+        return;
+    };
+    let dog = dir.join("eyecare-watchdog.exe");
+    if !dog.exists() {
+        return;
+    }
+    let _ = std::process::Command::new(dog)
+        .arg("--parent")
+        .arg(std::process::id().to_string())
+        .arg("--state")
+        .arg(state_path)
+        .spawn();
+}
+
 /// 退出前把屏幕还原，并清掉崩溃恢复用的备份。
+/// 这里不能用 unwrap：锁一旦中毒就 panic，反而让恢复代码根本跑不到。
 fn shutdown(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
-    let saved = state.saved.lock().unwrap();
-    restore_all(&state.backend, &saved);
+    if let Ok(saved) = state.saved.lock() {
+        restore_all(&state.backend, &saved);
+    }
     clear_state(&default_state_path());
 }
 
@@ -177,7 +200,8 @@ fn main() {
 
             let saved = snapshot(&backend);
             if save_state(&state_path, &saved).is_ok() {
-                // 备份落盘成功，后面才敢动屏幕
+                // 备份落盘成功，后面才敢动屏幕；同时拉起看门狗守着
+                spawn_watchdog(&state_path);
             }
 
             let cfg = Config::load();
@@ -239,7 +263,7 @@ fn main() {
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("护眼")
+                .tooltip("Eye眼")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| {
