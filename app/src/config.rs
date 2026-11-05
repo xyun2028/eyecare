@@ -83,7 +83,14 @@ pub struct Config {
     pub color: Option<[u8; 3]>,
     /// "all" 或具体显示器 id
     pub target: String,
+    /// 界面主题："system" / "light" / "dark"
+    #[serde(default = "default_theme")]
+    pub theme: String,
     pub schedule: Schedule,
+}
+
+fn default_theme() -> String {
+    "system".to_string()
 }
 
 impl Default for Config {
@@ -95,6 +102,7 @@ impl Default for Config {
             brightness: 1.0,
             color: None,
             target: "all".to_string(),
+            theme: default_theme(),
             schedule: Schedule::default(),
         }
     }

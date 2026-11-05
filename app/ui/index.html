@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark" data-mode="system">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,12 +10,15 @@
     <header class="top">
       <div class="brand">
         <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="9" fill="#1a1f27" />
-          <rect x="0.5" y="0.5" width="31" height="31" rx="8.5" fill="none" stroke="#2b323d" />
-          <path d="M4 16 C8 8.5, 24 8.5, 28 16 C24 23.5, 8 23.5, 4 16 Z" fill="#f2ab47" />
-          <circle cx="16" cy="16" r="4.6" fill="#8c5112" />
-          <circle cx="16" cy="16" r="2.2" fill="#140d05" />
-          <circle cx="14.6" cy="14.6" r="0.95" fill="#fff2dc" />
+          <defs>
+            <linearGradient id="mk" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#ffcd85" />
+              <stop offset="1" stop-color="#e27a2e" />
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="9" fill="url(#mk)" />
+          <path d="M4.5 16 C8.5 9, 23.5 9, 27.5 16 C23.5 23, 8.5 23, 4.5 16 Z" fill="#281708" />
+          <circle cx="14.2" cy="14.4" r="1.5" fill="#fffaf0" />
         </svg>
         <div class="titles">
           <div class="title-row">
@@ -28,6 +31,32 @@
 
       <div class="top-right">
         <span id="status" class="status">正在读取…</span>
+
+        <button id="theme" class="icon-btn" title="主题：跟随系统">
+          <svg class="ti ti-auto" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8" />
+            <path d="M12 5a7 7 0 0 1 0 14z" fill="currentColor" />
+          </svg>
+          <svg class="ti ti-light" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8" />
+            <path
+              d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+            />
+          </svg>
+          <svg class="ti ti-dark" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M20 14.6A8.2 8.2 0 0 1 9.4 4a7.6 7.6 0 1 0 10.6 10.6z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+
         <button id="power" class="power" title="开关护眼" aria-label="开关护眼">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
@@ -56,7 +85,10 @@
       <main class="main">
         <section class="hero">
           <div class="hero-head">
-            <span class="label">色温</span>
+            <div class="hero-head-left">
+              <span class="label">色温</span>
+              <span id="autoNote" class="tag hidden">自动接管中</span>
+            </div>
             <span class="big"><span id="kelvinNum">4500</span><i>K</i></span>
           </div>
           <input id="kelvin" class="range-temp" type="range" min="1000" max="6500" step="50" />
@@ -74,13 +106,9 @@
             <div class="row">
               <label for="color">颜色</label>
               <input id="color" type="color" value="#c7edcc" />
-              <span class="val muted">取色即生效，会切到自定义</span>
+              <span class="val muted">取色即生效</span>
             </div>
           </div>
-
-          <p id="autoNote" class="hint hidden">
-            自动模式已接管色温，上面的色温暂不生效；亮度仍然有效。
-          </p>
         </section>
 
         <div class="grid2">

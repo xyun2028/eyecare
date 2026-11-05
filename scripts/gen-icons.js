@@ -54,20 +54,18 @@ function render(size) {
   const W = size * SS;
   const buf = Buffer.alloc(W * W * 4);
   const c = W / 2;
-  const radius = W * 0.23;
+  const radius = W * 0.24;
 
   // 杏仁形眼型 = 两个大圆的交集
-  const lensR = W * 0.5;
-  const lensK = W * 0.335;
-  const irisR = W * 0.155;
-  const pupilR = W * 0.072;
-  const hiR = W * 0.03;
+  const lensR = W * 0.48;
+  const lensK = W * 0.315;
+  const hiR = W * 0.042;
 
-  const bg = [0x12, 0x15, 0x1b];
-  const amber = [0xf2, 0xab, 0x47];
-  const iris = [0x8c, 0x51, 0x12];
-  const pupil = [0x14, 0x0d, 0x05];
-  const highlight = [0xff, 0xf2, 0xdc];
+  // 暖色底 + 深色眼，任务栏里比黑底更容易认出来
+  const bgTop = [255, 205, 133];
+  const bgBot = [226, 122, 46];
+  const eye = [40, 23, 8];
+  const highlight = [255, 250, 240];
 
   for (let y = 0; y < W; y++) {
     for (let x = 0; x < W; x++) {
@@ -82,15 +80,17 @@ function render(size) {
         Math.hypot(px - c, py - (c - lensK)) <= lensR &&
         Math.hypot(px - c, py - (c + lensK)) <= lensR;
 
-      const dCenter = Math.hypot(px - c, py - c);
-      const dHi = Math.hypot(px - (c - W * 0.042), py - (c - W * 0.042));
+      const dHi = Math.hypot(px - (c - W * 0.055), py - (c - W * 0.05));
 
       // 1px 的软边缘，避免小尺寸下出现锯齿
       const alpha = Math.min(1, Math.max(0, 1 - rectDist));
-      let color = bg;
-      if (inLens) color = amber;
-      if (inLens && dCenter <= irisR) color = iris;
-      if (inLens && dCenter <= pupilR) color = pupil;
+      const t = py / W;
+      let color = [
+        Math.round(bgTop[0] + (bgBot[0] - bgTop[0]) * t),
+        Math.round(bgTop[1] + (bgBot[1] - bgTop[1]) * t),
+        Math.round(bgTop[2] + (bgBot[2] - bgTop[2]) * t),
+      ];
+      if (inLens) color = eye;
       if (inLens && dHi <= hiR) color = highlight;
 
       const i = (y * W + x) * 4;

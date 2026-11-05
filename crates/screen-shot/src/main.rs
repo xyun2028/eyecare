@@ -15,10 +15,44 @@ use windows_sys::Win32::Graphics::Gdi::{
     BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDC, GetDIBits,
     ReleaseDC, SelectObject, BITMAPINFO, BI_RGB, DIB_RGB_COLORS, HDC, SRCCOPY,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    FindWindowW, GetSystemMetrics, GetWindowRect, SM_CXSCREEN, SM_CYSCREEN,
+};
+
+/// 只读窗口尺寸，不截图。用来核对窗口有没有被系统强制拉大，避免无谓地拍用户屏幕。
+fn print_rect(title: &str) -> bool {
+    let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let hwnd = FindWindowW(std::ptr::null(), wide.as_ptr());
+        if hwnd.is_null() {
+            println!("没找到标题为「{title}」的窗口");
+            return true;
+        }
+        let mut rect: windows_sys::Win32::Foundation::RECT = zeroed();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            println!("读不到窗口位置");
+            return true;
+        }
+        println!(
+            "窗口 {}x{}，位于 ({}, {})",
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            rect.left,
+            rect.top
+        );
+    }
+    true
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if args.first().map(|s| s.as_str()) == Some("--rect") {
+        let title = args.get(1).cloned().unwrap_or_else(|| "护眼 · eyecare".to_string());
+        print_rect(&title);
+        return;
+    }
+
     let out = args.first().cloned().unwrap_or_else(|| "shot.bmp".to_string());
 
     // 可选裁切区域：x y 宽 高

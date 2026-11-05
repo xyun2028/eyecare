@@ -101,8 +101,25 @@ fn bootstrap(state: tauri::State<AppState>) -> Status {
     status_of(&state, cfg)
 }
 
+/// 把主题同步给窗口本身，标题栏颜色才会跟着变。
+/// "system" 对应 None，交给系统决定。
+fn apply_window_theme(app: &tauri::AppHandle, mode: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        let theme = match mode {
+            "light" => Some(tauri::Theme::Light),
+            "dark" => Some(tauri::Theme::Dark),
+            _ => None,
+        };
+        let _ = window.set_theme(theme);
+    }
+}
+
 #[tauri::command]
-fn update_config(state: tauri::State<AppState>, cfg: Config) -> Status {
+fn update_config(
+    app: tauri::AppHandle,
+    state: tauri::State<AppState>,
+    cfg: Config,
+) -> Status {
     let mut safe = cfg.clone();
     safe.brightness = safe.brightness.clamp(0.05, 1.0);
     safe.kelvin = safe.kelvin.clamp(1000, 6500);
@@ -110,6 +127,7 @@ fn update_config(state: tauri::State<AppState>, cfg: Config) -> Status {
     safe.save();
     *state.config.lock().unwrap() = safe.clone();
     apply_now(&state, &safe);
+    apply_window_theme(&app, &safe.theme);
     status_of(&state, safe)
 }
 
@@ -171,6 +189,7 @@ fn main() {
             });
 
             apply_now(&app.state::<AppState>(), &cfg);
+            apply_window_theme(app.handle(), &cfg.theme);
 
             // 窗口在配置里是隐藏创建的，这里按启动方式决定要不要露出来。
             // 必须在这一步就 show：Windows 不会给「从未显示过」的窗口分配任务栏按钮。

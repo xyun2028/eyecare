@@ -36,6 +36,23 @@ function presetName(id) {
   return p ? p.name : "自定义";
 }
 
+const darkMedia = window.matchMedia("(prefers-color-scheme: dark)");
+const THEME_ORDER = ["system", "light", "dark"];
+const THEME_LABEL = { system: "跟随系统", light: "白天", dark: "黑夜" };
+
+function resolvedTheme(mode) {
+  if (mode === "light" || mode === "dark") return mode;
+  return darkMedia.matches ? "dark" : "light";
+}
+
+function applyTheme() {
+  const mode = S.config.theme || "system";
+  const root = document.documentElement;
+  root.dataset.mode = mode;
+  root.dataset.theme = resolvedTheme(mode);
+  el("theme").title = `主题：${THEME_LABEL[mode]}`;
+}
+
 function renderStatus() {
   const c = S.config;
   const e = S.effective;
@@ -109,6 +126,7 @@ function renderControls() {
   el("brightness").value = Math.round(c.brightness * 100);
   el("brightnessVal").textContent = `${Math.round(c.brightness * 100)}%`;
   if (c.color) el("color").value = rgbToHex(c.color);
+  el("kelvin").classList.toggle("dim", c.schedule.enabled);
   el("autoNote").classList.toggle("hidden", !c.schedule.enabled);
 }
 
@@ -226,6 +244,20 @@ function bindEvents() {
     e.target.checked = ok;
     if (!ok) el("autostart").title = "写入注册表失败";
   });
+
+  el("theme").addEventListener("click", () => {
+    const cur = S.config.theme || "system";
+    const next = THEME_ORDER[(THEME_ORDER.indexOf(cur) + 1) % THEME_ORDER.length];
+    S.config.theme = next;
+    applyTheme();
+    pushNow();
+  });
+
+  // 跟随系统时，系统切换深浅色要立刻响应
+  darkMedia.addEventListener("change", () => {
+    if (!S || (S.config.theme || "system") !== "system") return;
+    document.documentElement.dataset.theme = darkMedia.matches ? "dark" : "light";
+  });
 }
 
 async function boot() {
@@ -235,6 +267,7 @@ async function boot() {
   }
 
   S = await invoke("bootstrap");
+  applyTheme();
   bindEvents();
   renderAll();
   el("autostart").checked = await invoke("get_autostart");

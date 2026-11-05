@@ -13,15 +13,14 @@
         "label": "main",
         "title": "护眼 · eyecare",
         "width": 880,
-        "height": 524,
+        "height": 488,
         "visible": false,
         "resizable": true,
         "minWidth": 800,
-        "minHeight": 560,
+        "minHeight": 400,
         "center": true,
         "skipTaskbar": false,
-        "backgroundColor": "#0d0f13",
-        "theme": "Dark"
+        "backgroundColor": "#0d0f13"
       }
     ],
     "security": {
