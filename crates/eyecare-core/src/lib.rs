@@ -6,6 +6,7 @@
 //! 最后 256 个是蓝色。每个位置代表「输入亮度 i」应该被映射成多少输出亮度。
 
 pub mod display;
+pub mod sun;
 
 pub use display::{DisplayBackend, DisplayInfo};
 

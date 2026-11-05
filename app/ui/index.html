@@ -69,6 +69,12 @@
       检测到有屏幕开启了 HDR，那块屏上色温调整不会生效。
     </div>
 
+    <div id="break-banner" class="break-banner hidden">
+      <span class="banner-title">该抬头看看远处了</span>
+      <span id="bannerCount" class="banner-count">20</span>
+      <button id="bannerClose" class="banner-btn">知道了</button>
+    </div>
+
     <div class="body">
       <aside class="side">
         <div class="side-head">
@@ -81,13 +87,14 @@
       </aside>
 
       <main class="main">
+        <div class="main-scroll">
         <section class="hero">
           <div class="hero-head">
             <div class="hero-head-left">
               <span class="label">色温</span>
               <span id="autoNote" class="tag hidden">自动接管中</span>
             </div>
-            <span class="big"><span id="kelvinNum">4500</span><i>K</i></span>
+            <span class="big" id="heroValue"><span id="kelvinNum">4500</span><i>K</i></span>
           </div>
           <input id="kelvin" class="range-temp" type="range" min="1000" max="6500" step="50" />
           <div class="scale">
@@ -101,67 +108,129 @@
               <input id="brightness" class="range-dim" type="range" min="20" max="100" />
               <span id="brightnessVal" class="val">100%</span>
             </div>
-            <div class="row">
-              <label for="color">颜色</label>
-              <input id="color" type="color" value="#c7edcc" />
-              <span class="val muted">取色即生效</span>
+            <div class="row split">
+              <span class="half">
+                <label for="color">颜色</label>
+                <input id="color" type="color" value="#c7edcc" />
+              </span>
+              <span class="half">
+                <label for="target">应用到</label>
+                <select id="target"></select>
+              </span>
             </div>
           </div>
         </section>
 
-        <div class="grid2">
-          <section class="panel">
-            <div class="panel-head">
-              <h2>按时间自动</h2>
+        <!-- ------------------------------------------------------- 24 小时曲线 -->
+        <section class="panel curve-panel">
+          <div class="panel-head">
+            <h2>24 小时曲线</h2>
+            <div class="head-tools">
+              <div class="seg" id="modeSeg">
+                <button type="button" data-mode="clock">钟点</button>
+                <button type="button" data-mode="sun">日出日落</button>
+              </div>
               <label class="switch">
                 <input id="auto" type="checkbox" />
                 <span class="slider"></span>
               </label>
             </div>
+          </div>
 
-            <div class="time-row">
-              <span class="dot day"></span>
-              <span class="time-label">白天</span>
-              <input id="dayStart" type="time" value="07:00" />
-              <input id="dayK" class="num" type="number" min="1000" max="6500" step="100" />
-              <span class="unit">K</span>
-            </div>
-            <div class="time-row">
-              <span class="dot night"></span>
-              <span class="time-label">夜间</span>
-              <input id="nightStart" type="time" value="19:00" />
-              <input id="nightK" class="num" type="number" min="1000" max="6500" step="100" />
-              <span class="unit">K</span>
-            </div>
-            <p class="hint">
-              切换前后 <input id="transition" class="num small" type="number" min="0" max="180" step="10" /> 分钟内过渡
-            </p>
-          </section>
+          <div class="curve-wrap">
+            <svg id="curve" viewBox="0 0 720 100" preserveAspectRatio="xMidYMid meet">
+              <g id="curveGrid"></g>
+              <path id="curveArea" class="curve-area" d="" />
+              <path id="curveLine" class="curve-line" d="" />
+              <g id="curveMarks"></g>
+              <line id="curveNow" class="curve-now" x1="0" y1="10" x2="0" y2="88" />
+              <g id="curveDots"></g>
+            </svg>
+          </div>
 
+          <div class="curve-foot">
+            <div class="seg small" id="daySeg">
+              <button type="button" data-day="weekday">工作日</button>
+              <button type="button" data-day="weekend">周末</button>
+            </div>
+            <span id="dayNote" class="muted"></span>
+            <label class="hint right">
+              过渡
+              <input id="transition" class="num small" type="number" min="0" max="180" step="10" />
+              分钟
+            </label>
+          </div>
+
+          <div class="anchor-bar">
+            <span class="row-label">选中</span>
+            <input id="anchorTime" type="time" />
+            <input id="anchorK" class="num" type="number" min="1000" max="6500" step="50" />
+            <span class="unit">K</span>
+            <span id="anchorHint" class="muted">点曲线上的圆点选中，拖动可改时间和色温</span>
+          </div>
+        </section>
+
+        <div class="grid2">
+          <!-- ------------------------------------------------------- 20-20-20 -->
           <section class="panel">
             <div class="panel-head">
-              <h2>输出</h2>
+              <h2>20-20-20</h2>
+              <label class="switch">
+                <input id="breakOn" type="checkbox" />
+                <span class="slider"></span>
+              </label>
             </div>
 
-            <div class="field">
-              <label for="target">应用到</label>
-              <select id="target"></select>
+            <div class="clock">
+              <span id="breakTime" class="clock-num">20:00</span>
+              <span id="breakCap" class="clock-cap">后提醒休息</span>
+            </div>
+            <div class="bar"><div id="breakBar" class="bar-fill"></div></div>
+
+            <div class="time-row compact">
+              <span class="time-label">间隔</span>
+              <input id="workMinutes" class="num" type="number" min="1" max="180" step="1" />
+              <span class="unit">分钟</span>
+              <button id="skip" class="mini-btn end">跳过这次</button>
             </div>
 
-            <div class="switch-row">
+            <div class="switch-row tight">
               <div class="switch-text">
-                <div class="switch-title">开机自启</div>
-                <div class="switch-desc">静默进入托盘</div>
+                <div class="switch-title">休息时调暗</div>
               </div>
               <label class="switch">
-                <input id="autostart" type="checkbox" />
+                <input id="dimScreen" type="checkbox" />
                 <span class="slider"></span>
               </label>
             </div>
           </section>
+
+          <!-- ----------------------------------------------------------- 用眼 -->
+          <section class="panel">
+            <div class="panel-head">
+              <h2>用眼</h2>
+              <span id="streakPill" class="pill off">未开始</span>
+            </div>
+
+            <p class="stats-big">
+              <span id="todayHours">0</span><i>小时</i><span id="todayMins">0</span><i>分</i>
+            </p>
+            <p id="todayMeta" class="muted">今天还没有记录</p>
+            <div id="weekBars" class="week-bars"></div>
+            <p class="muted week-cap">最近七天</p>
+          </section>
         </div>
 
-        <p class="foot">关闭窗口会缩回托盘，右键托盘图标可以快速切换</p>
+        </div>
+
+        <footer class="foot">
+          <span class="foot-text">关闭窗口会缩回托盘，右键托盘图标可以快速切换</span>
+          <span class="foot-label">开机自启</span>
+          <label class="switch">
+            <input id="autostart" type="checkbox" />
+            <span class="slider"></span>
+          </label>
+        </footer>
       </main>
     </div>
 

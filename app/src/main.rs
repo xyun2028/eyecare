@@ -1,23 +1,33 @@
 #![windows_subsystem = "windows"]
 
 mod config;
+mod stats;
 
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
 use config::{
-    builtin_presets, find_preset, presets_for, resolve, swatch_for_kelvin, swatch_for_rgb, Config,
-    Preset, Tint,
+    builtin_presets, find_preset, now_secs, presets_for, resolve, swatch_for_kelvin,
+    swatch_for_rgb, Anchor, Config, Moment, Preset, Tint,
 };
 use eyecare_core::display::{
     clear_state, default_state_path, load_state, restore_all, save_state, snapshot,
 };
 use eyecare_core::{build_gamma_ramp, build_gamma_ramp_rgb, DisplayBackend, DisplayInfo};
 use eyecare_win::WindowsBackend;
+use stats::Stats;
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
+
+/// 休息提示时把色温压到当前的这个比例，亮度再乘下面那个系数。
+/// 用相对值而不是固定色温，是因为用户本来就在 2700K 时，
+/// 一个固定的 1900K 几乎看不出变化，压三成才有「屏幕变了」的感觉。
+const REST_KELVIN_RATIO: f64 = 0.55;
+const REST_BRIGHTNESS_RATIO: f64 = 0.7;
+/// 滤色模式下没有色温可压，退回这个暖色。
+const REST_FALLBACK_KELVIN: u32 = 1800;
 
 struct AppState {
     backend: WindowsBackend,
@@ -25,10 +35,33 @@ struct AppState {
     saved: Mutex<Vec<(String, [u16; 768])>>,
     /// 当前是否已经改过屏幕。用来避免「关闭状态」下反复覆盖用户的手动调整
     active: Mutex<bool>,
+    /// 休息提示截止的时间戳。有值且还没到期时，写屏走「休息色」
+    rest_until: Mutex<Option<u64>>,
+    stats: Mutex<Stats>,
 }
 
 const APP_NAME: &str = "eyecare";
 const WINDOW_TITLE: &str = "Eye眼";
+
+#[derive(Clone, serde::Serialize)]
+struct SunView {
+    sunrise: f64,
+    sunset: f64,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct ScheduleView {
+    /// 今天实际生效的曲线（日出模式下是算出来的四个点）
+    effective_points: Vec<Anchor>,
+    sun_times: Option<SunView>,
+    weekend: bool,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct BreakView {
+    remaining_seconds: Option<u64>,
+    resting: bool,
+}
 
 #[derive(Clone, serde::Serialize)]
 struct Status {
@@ -37,6 +70,9 @@ struct Status {
     displays: Vec<DisplayInfo>,
     effective: Option<Tint>,
     clock: String,
+    schedule_view: ScheduleView,
+    break_view: BreakView,
+    stats: stats::StatsView,
 }
 
 fn clock_text() -> String {
@@ -46,15 +82,75 @@ fn clock_text() -> String {
 }
 
 fn status_of(state: &AppState, cfg: Config) -> Status {
-    let effective = resolve(&cfg, config::minutes_now());
+    let moment = Moment::now();
+    let effective = resolve(&cfg, &moment);
     let visible = presets_for(&cfg);
+
+    let sun_times = cfg.schedule.sun_times(&moment).map(|t| SunView {
+        sunrise: t.sunrise,
+        sunset: t.sunset,
+    });
+
     Status {
         config: cfg,
         presets: visible,
         displays: state.backend.list(),
         effective,
         clock: clock_text(),
+        schedule_view: ScheduleView {
+            effective_points: state_schedule_points(state, &moment),
+            sun_times,
+            weekend: moment.is_weekend,
+        },
+        break_view: BreakView {
+            remaining_seconds: state.config.lock().unwrap().break_plan.remaining(),
+            resting: rest_active(state),
+        },
+        stats: state.stats.lock().unwrap().view(),
     }
+}
+
+fn state_schedule_points(state: &AppState, moment: &Moment) -> Vec<Anchor> {
+    state
+        .config
+        .lock()
+        .unwrap()
+        .schedule
+        .effective_points(moment)
+}
+
+/// 休息提示是否还在生效。过期的顺手清掉。
+fn rest_active(state: &AppState) -> bool {
+    let mut guard = state.rest_until.lock().unwrap();
+    match *guard {
+        Some(until) if now_secs() < until => true,
+        Some(_) => {
+            *guard = None;
+            false
+        }
+        None => false,
+    }
+}
+
+fn begin_rest(state: &AppState, seconds: u64) {
+    *state.rest_until.lock().unwrap() = Some(now_secs() + seconds.max(1));
+}
+
+/// 休息提示要把屏幕变成什么样。
+///
+/// 在原来的颜色上再往暖处压一档，而不是换成一个固定值：
+/// 固定值在用户本来就很暖的时候看不出来，在用户很白的时候又太突兀。
+fn rest_tint(tint: Tint, brightness: f64) -> (Tint, f64) {
+    let kelvin = match tint {
+        Tint::Kelvin { kelvin } => (kelvin as f64 * REST_KELVIN_RATIO).round() as u32,
+        Tint::Rgb { .. } => REST_FALLBACK_KELVIN,
+    };
+    (
+        Tint::Kelvin {
+            kelvin: kelvin.clamp(config::KELVIN_MIN, config::KELVIN_MAX),
+        },
+        (brightness * REST_BRIGHTNESS_RATIO).clamp(0.05, 1.0),
+    )
 }
 
 /// 把当前配置真正写到屏幕上。
@@ -68,14 +164,20 @@ fn apply_now(state: &AppState, cfg: &Config) {
         return;
     }
 
-    let tint = resolve(cfg, config::minutes_now());
-    let Some(tint) = tint else {
+    let Some(mut tint) = resolve(cfg, &Moment::now()) else {
         return;
     };
 
+    let mut brightness = cfg.brightness.clamp(0.05, 1.0);
+    let resting = rest_active(state);
+    if resting {
+        let (next_tint, next_brightness) = rest_tint(tint, brightness);
+        tint = next_tint;
+        brightness = next_brightness;
+    }
+
     *state.active.lock().unwrap() = true;
     let saved = state.saved.lock().unwrap();
-    let brightness = cfg.brightness.clamp(0.05, 1.0);
 
     for display in state.backend.list() {
         let targeted = cfg.target == "all" || cfg.target == display.id;
@@ -119,6 +221,9 @@ fn shutdown(app: &tauri::AppHandle) {
     if let Ok(saved) = state.saved.lock() {
         restore_all(&state.backend, &saved);
     }
+    if let Ok(stats) = state.stats.lock() {
+        stats.save();
+    }
     clear_state(&default_state_path());
 }
 
@@ -147,15 +252,34 @@ fn update_config(
     state: tauri::State<AppState>,
     cfg: Config,
 ) -> Status {
+    let old = state.config.lock().unwrap().clone();
     let mut safe = cfg.clone();
-    safe.brightness = safe.brightness.clamp(0.05, 1.0);
-    safe.kelvin = safe.kelvin.clamp(1000, 6500);
+    safe.normalize();
+
+    // 间隔改了要重新计时，否则用户把 20 分钟改成 5 分钟，还得等满旧的 20 分钟
+    if safe.break_plan.work_minutes != old.break_plan.work_minutes {
+        safe.break_plan.disarm();
+    }
+    if !safe.break_plan.enabled {
+        safe.break_plan.disarm();
+    } else {
+        safe.break_plan.arm();
+    }
 
     safe.save();
     *state.config.lock().unwrap() = safe.clone();
     apply_now(&state, &safe);
     apply_window_theme(&app, &safe.theme);
     status_of(&state, safe)
+}
+
+/// 手动结束正在进行的休息提示（屏幕还停在暖色时用）。
+#[tauri::command]
+fn end_rest(state: tauri::State<AppState>) -> Status {
+    *state.rest_until.lock().unwrap() = None;
+    let cfg = state.config.lock().unwrap().clone();
+    apply_now(&state, &cfg);
+    status_of(&state, cfg)
 }
 
 /// 把之前移出列表的内置预设全部找回来。用户自己存的预设不受影响。
@@ -180,7 +304,7 @@ fn get_autostart() -> bool {
 fn save_preset(app: tauri::AppHandle, state: tauri::State<AppState>, name: String) -> Status {
     let mut cfg = state.config.lock().unwrap().clone();
 
-    let (kelvin, color, swatch) = match resolve(&cfg, config::minutes_now()) {
+    let (kelvin, color, swatch) = match resolve(&cfg, &Moment::now()) {
         Some(Tint::Kelvin { kelvin }) => (Some(kelvin), None, swatch_for_kelvin(kelvin)),
         Some(Tint::Rgb { rgb }) => (None, Some(rgb), swatch_for_rgb(rgb)),
         None => (Some(cfg.kelvin), None, swatch_for_kelvin(cfg.kelvin)),
@@ -351,6 +475,8 @@ fn main() {
                 config: Mutex::new(cfg.clone()),
                 saved: Mutex::new(saved),
                 active: Mutex::new(false),
+                rest_until: Mutex::new(None),
+                stats: Mutex::new(Stats::load()),
             });
 
             apply_now(&app.state::<AppState>(), &cfg);
@@ -427,20 +553,51 @@ fn main() {
                 .build(app)?;
 
             // ---- 后台循环 ----
-            // 每 2 秒重新下发一次：既是为了跟随时间自动变化，
+            // 每 2 秒重新下发一次：既是为了跟随曲线变化，
             // 也是为了防止系统或驱动把 Gamma 表重置掉。
+            // 顺带记用眼时长、检查休息计时。
             let handle = app.handle().clone();
             thread::spawn(move || {
                 let mut tick: u32 = 0;
                 loop {
                     thread::sleep(Duration::from_secs(2));
                     let state = handle.state::<AppState>();
-                    let cfg = state.config.lock().unwrap().clone();
+                    let now = now_secs();
+                    let mut cfg = state.config.lock().unwrap().clone();
+
+                    // 关掉护眼时不计时，但心跳照走，否则重新打开会把中间那段也算进来
+                    state.stats.lock().unwrap().tick(now, cfg.enabled);
+
+                    if cfg.break_plan.enabled {
+                        if let Some(due) = cfg.break_plan.due_at {
+                            if now >= due {
+                                let rest = cfg.break_plan.rest_seconds.max(1) as u64;
+
+                                // 面板可能根本没人看着，所以提醒要落到屏幕上
+                                if cfg.break_plan.dim_screen && cfg.enabled {
+                                    begin_rest(&state, rest);
+                                }
+                                state.stats.lock().unwrap().took_break();
+
+                                cfg.break_plan.due_at =
+                                    Some(now + cfg.break_plan.work_minutes.max(1) as u64 * 60);
+                                cfg.save();
+                                *state.config.lock().unwrap() = cfg.clone();
+
+                                let _ = handle.emit(
+                                    "break-due",
+                                    serde_json::json!({ "restSeconds": rest }),
+                                );
+                            }
+                        }
+                    }
+
                     apply_now(&state, &cfg);
 
                     // 每 30 秒把最新状态推给界面，界面不用自己算时间
                     tick += 1;
-                    if tick % 15 == 0 && cfg.schedule.enabled {
+                    if tick % 15 == 0 {
+                        state.stats.lock().unwrap().save();
                         let _ = handle.emit("status", status_of(&state, cfg));
                     }
                 }
@@ -461,6 +618,7 @@ fn main() {
             save_preset,
             delete_preset,
             restore_presets,
+            end_rest,
             get_autostart,
             set_autostart
         ])

@@ -12,12 +12,12 @@
       {
         "label": "main",
         "title": "Eye眼",
-        "width": 880,
-        "height": 488,
+        "width": 1120,
+        "height": 820,
         "visible": false,
         "resizable": true,
-        "minWidth": 800,
-        "minHeight": 400,
+        "minWidth": 1000,
+        "minHeight": 700,
         "center": true,
         "skipTaskbar": false,
         "backgroundColor": "#0d0f13"
