@@ -29,32 +29,32 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #f0ede7;
-  --surface: #fbf9f5;
-  --surface-2: #f3f0ea;
-  --line: rgba(40, 32, 20, 0.09);
-  --line-strong: rgba(40, 32, 20, 0.18);
-  --text: #23272e;
-  --text-soft: #464c56;
-  --dim: #5b6169;
-  --faint: #8a9099;
-  --label: #8f959e;
-  --foot: #a8adb5;
-  --hover: rgba(40, 32, 20, 0.045);
-  --track: #ddd8d0;
+  --bg: #f1f3f2;
+  --surface: #ffffff;
+  --surface-2: #f6f8f7;
+  --line: rgba(20, 32, 28, 0.08);
+  --line-strong: rgba(20, 32, 28, 0.16);
+  --text: #1c2226;
+  --text-soft: #47505a;
+  --dim: #5c6570;
+  --faint: #8b939d;
+  --label: #8b939d;
+  --foot: #a7aeb7;
+  --hover: rgba(20, 32, 28, 0.045);
+  --track: #e3e7e6;
   --knob: #ffffff;
-  --dim-a: #e2ddd4;
-  --dim-b: #c6bfb2;
-  --top-a: #faf8f4;
-  --top-b: #f1eee8;
-  --side-bg: #ebe7e0;
-  --scroll: #d6d0c6;
-  --shadow: 0 1px 2px rgba(60, 45, 25, 0.05), 0 4px 14px rgba(60, 45, 25, 0.05);
-  --accent: #c9761f;
-  --accent-soft: rgba(201, 118, 31, 0.1);
-  --accent-line: rgba(201, 118, 31, 0.28);
+  --dim-a: #e7eae9;
+  --dim-b: #c9cecd;
+  --top-a: #ffffff;
+  --top-b: #f7f9f8;
+  --side-bg: #edf0ef;
+  --scroll: #d5dad9;
+  --shadow: 0 1px 2px rgba(16, 32, 26, 0.04), 0 6px 18px rgba(16, 32, 26, 0.05);
+  --accent: #d1781c;
+  --accent-soft: rgba(209, 120, 28, 0.1);
+  --accent-line: rgba(209, 120, 28, 0.26);
   --warn-text: #8a5a18;
-  --warn-bg: rgba(201, 118, 31, 0.08);
+  --warn-bg: rgba(209, 120, 28, 0.08);
 }
 
 * {
@@ -279,9 +279,9 @@ h1 {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 10px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   cursor: pointer;
   text-align: left;
@@ -299,12 +299,17 @@ h1 {
 }
 
 .sw {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   flex: none;
   border-radius: 50%;
-  border: 1px solid var(--line-strong);
-  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(16, 32, 26, 0.12);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 1px 2px rgba(16, 32, 26, 0.12);
+}
+
+:root[data-theme="dark"] .sw {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .p-name {
@@ -314,8 +319,8 @@ h1 {
 }
 
 .p-val {
-  font-size: 10.5px;
-  color: var(--faint);
+  font-size: 11px;
+  color: var(--dim);
   font-variant-numeric: tabular-nums;
 }
 

@@ -20,6 +20,13 @@ function rgbToHex(rgb) {
   return "#" + rgb.map((n) => n.toString(16).padStart(2, "0")).join("");
 }
 
+// 同一个颜色压暗或提亮，用来给预设圆点做一点立体感
+function shade(hex, factor) {
+  const [r, g, b] = hexToRgb(hex);
+  const f = (v) => Math.round(Math.max(0, Math.min(255, v * factor)));
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+
 function toHHMM(minutes) {
   const h = Math.floor(minutes / 60) % 24;
   const m = Math.round(minutes % 60);
@@ -98,7 +105,7 @@ function renderPresets() {
 
     const sw = document.createElement("span");
     sw.className = "sw";
-    sw.style.background = `radial-gradient(circle at 32% 26%, rgba(255,255,255,.7) 0 16%, rgba(255,255,255,0) 58%), ${p.swatch}`;
+    sw.style.background = `linear-gradient(150deg, ${shade(p.swatch, 1.16)} 0%, ${p.swatch} 46%, ${shade(p.swatch, 0.82)} 100%)`;
 
     const nm = document.createElement("span");
     nm.className = "p-name";

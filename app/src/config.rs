@@ -154,7 +154,7 @@ pub fn presets() -> Vec<Preset> {
             hint: "不做任何调整",
             kelvin: Some(6500),
             color: None,
-            swatch: "#eef1f5",
+            swatch: "#d7e2f4",
         },
         Preset {
             id: "soft",
@@ -162,7 +162,7 @@ pub fn presets() -> Vec<Preset> {
             hint: "轻微偏暖",
             kelvin: Some(5500),
             color: None,
-            swatch: "#fdf0e0",
+            swatch: "#f5e3c8",
         },
         Preset {
             id: "office",
@@ -170,7 +170,7 @@ pub fn presets() -> Vec<Preset> {
             hint: "长时间写代码",
             kelvin: Some(4500),
             color: None,
-            swatch: "#ffdfb8",
+            swatch: "#ffd096",
         },
         Preset {
             id: "night",
@@ -178,7 +178,7 @@ pub fn presets() -> Vec<Preset> {
             hint: "晚上看屏幕",
             kelvin: Some(3400),
             color: None,
-            swatch: "#ffc48c",
+            swatch: "#ffb173",
         },
         Preset {
             id: "sleep",
@@ -186,7 +186,7 @@ pub fn presets() -> Vec<Preset> {
             hint: "睡前半小时",
             kelvin: Some(2700),
             color: None,
-            swatch: "#ffab6b",
+            swatch: "#ff8f4f",
         },
         Preset {
             id: "green",
@@ -194,7 +194,7 @@ pub fn presets() -> Vec<Preset> {
             hint: "老式护眼绿",
             kelvin: None,
             color: Some([199, 237, 204]),
-            swatch: "#c7edcc",
+            swatch: "#a9ddb7",
         },
         Preset {
             id: "paper",
@@ -202,7 +202,7 @@ pub fn presets() -> Vec<Preset> {
             hint: "看文档不刺眼",
             kelvin: None,
             color: Some([250, 235, 210]),
-            swatch: "#faebd2",
+            swatch: "#f0d29f",
         },
     ]
 }
