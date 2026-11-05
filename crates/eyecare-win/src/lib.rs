@@ -253,9 +253,11 @@ pub fn acquire_single_instance(name: &str) -> bool {
 }
 
 /// 把已经存在的窗口叫到前面来。第二个实例启动时用它把老窗口顶出来。
+/// 用 SW_RESTORE 而不是 SW_SHOW：窗口被最小化时（位置在 -32000,-32000），
+/// SW_SHOW 只是让它「可见」，不会还原尺寸。
 pub fn focus_window(title: &str) -> bool {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        FindWindowW, SetForegroundWindow, ShowWindow, SW_SHOW,
+        FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE,
     };
 
     let wide = to_wide(title);
@@ -264,7 +266,7 @@ pub fn focus_window(title: &str) -> bool {
         if hwnd.is_null() {
             return false;
         }
-        ShowWindow(hwnd, SW_SHOW);
+        ShowWindow(hwnd, SW_RESTORE);
         SetForegroundWindow(hwnd);
         true
     }
