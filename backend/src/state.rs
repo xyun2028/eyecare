@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::color::{build_gamma_ramp, build_gamma_ramp_rgb};
 use crate::gamma::{self, Ramp};
-use crate::model::{self, resolve_for, Config, Moment, ScreenConfig, Tint};
+use crate::model::{self, resolve_for, Config, Moment, RestTint, RestTintMode, ScreenConfig, Tint};
 use crate::stats::Stats;
 
 /// 旧格式：首行版本标记，之后每行 `屏名,768 个数字`。
@@ -304,17 +304,28 @@ fn baseline_for(saved: Option<&Ramp>) -> Ramp {
 
 /// 休息提示要把屏幕变成什么样。
 ///
-/// 在原来的颜色上再往暖处压一档，而不是换成一个固定值：
+/// 默认（`Auto`）在原来的颜色上再往暖处压一档，而不是换成一个固定值：
 /// 固定值在用户本来就很暖的时候看不出来，在用户很白的时候又太突兀。
-fn rest_tint(tint: Tint, brightness: f64) -> (Tint, f64) {
-    let kelvin = match tint {
-        Tint::Kelvin { kelvin } => (kelvin as f64 * REST_KELVIN_RATIO).round() as u32,
-        Tint::Rgb { .. } => REST_FALLBACK_KELVIN,
+/// 用户也可以直接指定色温或一个具体颜色，那就照他说的来，不再跟着当前色走。
+fn rest_tint(base: Tint, brightness: f64, rest: &RestTint) -> (Tint, f64) {
+    let tint = match rest.mode {
+        RestTintMode::Auto => match base {
+            Tint::Kelvin { kelvin } => Tint::Kelvin {
+                kelvin: ((kelvin as f64 * REST_KELVIN_RATIO).round() as u32)
+                    .clamp(model::KELVIN_MIN, model::KELVIN_MAX),
+            },
+            // 滤色模式下没有色温可压，退回这个暖色
+            Tint::Rgb { .. } => Tint::Kelvin {
+                kelvin: REST_FALLBACK_KELVIN,
+            },
+        },
+        RestTintMode::Kelvin => Tint::Kelvin {
+            kelvin: rest.kelvin.clamp(model::KELVIN_MIN, model::KELVIN_MAX),
+        },
+        RestTintMode::Rgb => Tint::Rgb { rgb: rest.rgb },
     };
     (
-        Tint::Kelvin {
-            kelvin: kelvin.clamp(model::KELVIN_MIN, model::KELVIN_MAX),
-        },
+        tint,
         (brightness * REST_BRIGHTNESS_RATIO).clamp(0.1, 1.0),
     )
 }
@@ -506,7 +517,7 @@ fn apply_inner(state: &AppState, cfg: &Config, force: bool) {
         let mut brightness = cfg.brightness_for(&screen);
         let tint = tint.map(|base| {
             if resting {
-                let (t, b) = rest_tint(base, brightness);
+                let (t, b) = rest_tint(base, brightness, &cfg.break_plan.rest_tint);
                 brightness = b;
                 t
             } else {
@@ -642,7 +653,8 @@ mod tests {
 
     #[test]
     fn 休息提示比当前颜色更暖更暗() {
-        let (tint, brightness) = rest_tint(Tint::Kelvin { kelvin: 4500 }, 1.0);
+        let rest = RestTint::default();
+        let (tint, brightness) = rest_tint(Tint::Kelvin { kelvin: 4500 }, 1.0, &rest);
         match tint {
             Tint::Kelvin { kelvin } => {
                 assert_eq!(kelvin, 2475, "4500 压到五成半");
@@ -655,7 +667,8 @@ mod tests {
 
     #[test]
     fn 休息提示不会低于最低色温() {
-        let (tint, _) = rest_tint(Tint::Kelvin { kelvin: 1000 }, 1.0);
+        let rest = RestTint::default();
+        let (tint, _) = rest_tint(Tint::Kelvin { kelvin: 1000 }, 1.0, &rest);
         match tint {
             Tint::Kelvin { kelvin } => assert_eq!(kelvin, model::KELVIN_MIN),
             other => panic!("实际 {other:?}"),
@@ -664,11 +677,44 @@ mod tests {
 
     #[test]
     fn 滤色模式下休息提示退回暖色() {
-        let (tint, _) = rest_tint(Tint::Rgb { rgb: [199, 237, 204] }, 1.0);
+        let rest = RestTint::default();
+        let (tint, _) = rest_tint(Tint::Rgb { rgb: [199, 237, 204] }, 1.0, &rest);
         match tint {
             Tint::Kelvin { kelvin } => assert_eq!(kelvin, REST_FALLBACK_KELVIN),
             other => panic!("实际 {other:?}"),
         }
+    }
+
+    #[test]
+    fn 指定色温时不再跟着当前颜色走() {
+        let rest = RestTint {
+            mode: RestTintMode::Kelvin,
+            kelvin: 1200,
+            ..RestTint::default()
+        };
+        // 当前是 6500K 还是 2000K，休息时都该落到用户选的那一档
+        for base in [6500, 2000] {
+            let (tint, _) = rest_tint(Tint::Kelvin { kelvin: base }, 1.0, &rest);
+            match tint {
+                Tint::Kelvin { kelvin } => assert_eq!(kelvin, 1200, "base={base}"),
+                other => panic!("实际 {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn 自定义颜色原样落到屏幕上且亮度仍压暗() {
+        let rest = RestTint {
+            mode: RestTintMode::Rgb,
+            rgb: [255, 90, 60],
+            ..RestTint::default()
+        };
+        let (tint, brightness) = rest_tint(Tint::Kelvin { kelvin: 6500 }, 1.0, &rest);
+        match tint {
+            Tint::Rgb { rgb } => assert_eq!(rgb, [255, 90, 60]),
+            other => panic!("实际 {other:?}"),
+        }
+        assert!(brightness < 1.0);
     }
 
     #[test]

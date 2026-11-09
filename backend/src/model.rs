@@ -466,6 +466,47 @@ pub const DIM_SECONDS_MIN: u32 = 2;
 /// 上限压到一分钟。压更久不如直接把休息时长调长。
 pub const DIM_SECONDS_MAX: u32 = 60;
 
+/// 休息时屏幕该变成什么颜色。
+///
+/// `Auto` 沿用原来的做法：在用户当前的颜色上按比例再压暖一档，
+/// 这样本来就在 2700K 的人也能看出变化。想固定一档暖色选 `Kelvin`，
+/// 想完全自己挑一色用 `Rgb`（界面上就是取色器）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum RestTintMode {
+    #[default]
+    Auto,
+    Kelvin,
+    Rgb,
+}
+
+/// 固定色温档的默认值。1900K 是偏琥珀的暖色，够明显，又不至于看不清字。
+pub const REST_KELVIN_DEFAULT: u32 = 1900;
+/// 自定义取色的默认值，和 1900K 看上去大致一样。
+pub const REST_RGB_DEFAULT: [u8; 3] = [255, 176, 102];
+
+/// 休息压暗时的颜色设置。
+///
+/// 三个字段都带默认值：老配置里没有这一项，读出来就是「跟随当前」，
+/// 行为和升级前完全一致，不会因为一次升级把休息色换掉。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RestTint {
+    pub mode: RestTintMode,
+    pub kelvin: u32,
+    pub rgb: [u8; 3],
+}
+
+impl Default for RestTint {
+    fn default() -> Self {
+        Self {
+            mode: RestTintMode::Auto,
+            kelvin: REST_KELVIN_DEFAULT,
+            rgb: REST_RGB_DEFAULT,
+        }
+    }
+}
+
 /// 20-20-20：每工作 20 分钟，看 20 英尺外 20 秒。
 /// 这里只管「什么时候该提醒」，不强制锁屏。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -480,6 +521,9 @@ pub struct BreakPlan {
     /// 屏幕压暗只需要一瞬间让人察觉。老配置没有这个字段，按默认值补。
     #[serde(default = "default_dim_seconds")]
     pub dim_seconds: u32,
+    /// 休息时屏幕变成什么颜色。老配置没有这一项，按「跟随当前」补
+    #[serde(default)]
+    pub rest_tint: RestTint,
     /// 下次提醒的时间戳。None 表示计时暂停或还没开始
     #[serde(default)]
     pub due_at: Option<u64>,
@@ -501,6 +545,7 @@ impl Default for BreakPlan {
             rest_seconds: 20,
             dim_screen: true,
             dim_seconds: DIM_SECONDS_DEFAULT,
+            rest_tint: RestTint::default(),
             due_at: None,
         }
     }
@@ -668,6 +713,13 @@ impl Config {
             .break_plan
             .dim_seconds
             .clamp(DIM_SECONDS_MIN, DIM_SECONDS_MAX);
+
+        // 休息色同样是手改配置文件的重灾区，色温越界会让曲线算出怪值
+        self.break_plan.rest_tint.kelvin = self
+            .break_plan
+            .rest_tint
+            .kelvin
+            .clamp(KELVIN_MIN, KELVIN_MAX);
 
         // 同一块屏只留一条记录，参数全部夹到合法范围
         let mut seen = std::collections::HashSet::new();
@@ -962,6 +1014,35 @@ mod tests {
         let plan: BreakPlan = serde_json::from_str(text).expect("老字段应该还能读");
         assert_eq!(plan.dim_seconds, DIM_SECONDS_DEFAULT);
         assert!(plan.due_at.is_none());
+    }
+
+    #[test]
+    fn 老配置没有休息色时按跟随当前补() {
+        let text = r#"{"enabled":true,"work_minutes":20,"rest_seconds":20,"dim_screen":true}"#;
+        let plan: BreakPlan = serde_json::from_str(text).expect("老字段应该还能读");
+        assert_eq!(plan.rest_tint.mode, RestTintMode::Auto);
+        assert_eq!(plan.rest_tint.kelvin, REST_KELVIN_DEFAULT);
+    }
+
+    #[test]
+    fn 休息色只给一部分字段时用默认值补齐() {
+        let text = r#"{"mode":"kelvin","kelvin":1200}"#;
+        let tint: RestTint = serde_json::from_str(text).expect("应该容忍缺字段");
+        assert_eq!(tint.mode, RestTintMode::Kelvin);
+        assert_eq!(tint.kelvin, 1200);
+        assert_eq!(tint.rgb, REST_RGB_DEFAULT);
+    }
+
+    #[test]
+    fn 休息色温越界会被夹回范围() {
+        let mut cfg = Config::default();
+        cfg.break_plan.rest_tint.kelvin = 100;
+        cfg.normalize();
+        assert_eq!(cfg.break_plan.rest_tint.kelvin, KELVIN_MIN);
+
+        cfg.break_plan.rest_tint.kelvin = 99999;
+        cfg.normalize();
+        assert_eq!(cfg.break_plan.rest_tint.kelvin, KELVIN_MAX);
     }
 
     #[test]

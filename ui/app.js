@@ -88,6 +88,13 @@ function rgbToHex(rgb) {
   return "#" + rgb.map((n) => Math.round(n).toString(16).padStart(2, "0")).join("");
 }
 
+/** `#rrggbb` 转成后端要的三元数组。格式不对时返回 null，交给调用方忽略。 */
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+}
+
 function shade(hex, factor) {
   const v = hex.replace("#", "");
   const rgb = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16));
@@ -142,6 +149,7 @@ function mockHost() {
       restSeconds: 20,
       dimScreen: true,
       dimSeconds: 6,
+      restTint: { mode: "auto", kelvin: 1900, rgb: [255, 176, 102] },
       dueAt: Date.now() + 20 * 60000,
     },
     customPresets: [],
@@ -256,6 +264,7 @@ function mockHost() {
       restSeconds: cfg.breakPlan.restSeconds,
       dimScreen: cfg.breakPlan.dimScreen,
       dimSeconds: cfg.breakPlan.dimSeconds,
+      restTint: cfg.breakPlan.restTint,
       remainingSeconds: cfg.breakPlan.enabled
         ? Math.max(0, Math.round((cfg.breakPlan.dueAt - Date.now()) / 1000))
         : null,
@@ -378,6 +387,17 @@ function mockHost() {
         if (typeof params.dimScreen === "boolean") cfg.breakPlan.dimScreen = params.dimScreen;
         if (typeof params.dimSeconds === "number") {
           cfg.breakPlan.dimSeconds = Math.min(60, Math.max(2, params.dimSeconds));
+        }
+        if (params.restTint) {
+          // 和真实后端一样按字段合并：只改一项时别把另外两项冲掉
+          const next = { ...cfg.breakPlan.restTint, ...params.restTint };
+          next.kelvin = Math.min(6500, Math.max(1000, Number(next.kelvin) || 1900));
+          if (Array.isArray(next.rgb) && next.rgb.length === 3) {
+            next.rgb = next.rgb.map((n) => Math.min(255, Math.max(0, Math.round(Number(n) || 0))));
+          } else {
+            next.rgb = [255, 176, 102];
+          }
+          cfg.breakPlan.restTint = next;
         }
         if (params.action === "skip") {
           cfg.breakPlan.dueAt = Date.now() + cfg.breakPlan.workMinutes * 60000;
@@ -567,6 +587,7 @@ function render() {
   setSwitch("dimScreen", !!S.break.dimScreen);
   el("dimSeconds").value = S.break.dimSeconds;
   el("dimSeconds").disabled = !S.break.dimScreen;
+  renderRestTint();
   el("workMinutes").value = S.break.workMinutes;
 
   renderSupportNote();
@@ -583,6 +604,21 @@ function render() {
   renderDayNote();
   renderStats();
   renderSunCountdown();
+}
+
+/** 把休息色渲染成「哪一档亮着」。色温和自定义颜色是两种模式，只亮一个。 */
+function renderRestTint() {
+  const rest = S.break.restTint || { mode: "auto", kelvin: 1900, rgb: [255, 176, 102] };
+  for (const btn of el("restTintSeg").querySelectorAll("button")) {
+    const active =
+      btn.dataset.mode === "auto"
+        ? rest.mode !== "kelvin" && rest.mode !== "rgb"
+        : rest.mode === "kelvin" && Number(btn.dataset.kelvin) === Number(rest.kelvin);
+    btn.classList.toggle("active", active);
+  }
+  el("restColor").value = rgbToHex(rest.rgb || [255, 176, 102]);
+  el("restTintSeg").classList.toggle("disabled", !S.break.dimScreen);
+  el("restColor").disabled = !S.break.dimScreen;
 }
 
 function renderModeSeg() {
@@ -1488,6 +1524,20 @@ function bind() {
   el("dimSeconds").addEventListener("change", async (e) => {
     const seconds = Math.min(60, Math.max(2, Number(e.target.value) || 0));
     await send("eyecare/break", { dimSeconds: seconds });
+  });
+
+  el("restTintSeg").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-mode]");
+    if (!btn || el("restTintSeg").classList.contains("disabled")) return;
+    const next = { ...S.break.restTint, mode: btn.dataset.mode };
+    if (btn.dataset.kelvin) next.kelvin = Number(btn.dataset.kelvin);
+    await send("eyecare/break", { restTint: next });
+  });
+
+  el("restColor").addEventListener("change", async (e) => {
+    const rgb = hexToRgb(e.target.value);
+    if (!rgb) return;
+    await send("eyecare/break", { restTint: { ...S.break.restTint, mode: "rgb", rgb } });
   });
 
   el("workMinutes").addEventListener("change", async (e) => {

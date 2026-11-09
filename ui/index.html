@@ -120,7 +120,17 @@
             <span class="knob"></span>
           </button>
         </div>
-        <p class="hint tight">到点时屏幕短暂变暖变暗，几秒后自动恢复，不打开面板也能察觉</p>
+        <div class="row compact">
+          <label class="row-label grow">休息颜色</label>
+          <div class="seg small" id="restTintSeg">
+            <button data-mode="auto" title="在当前颜色上再压暖一档">跟随当前</button>
+            <button data-mode="kelvin" data-kelvin="1900" title="1900K 琥珀">琥珀</button>
+            <button data-mode="kelvin" data-kelvin="2400" title="2400K 暖橙">暖橙</button>
+            <button data-mode="kelvin" data-kelvin="1200" title="1200K 偏红">深红</button>
+          </div>
+          <input id="restColor" type="color" value="#ffb066" title="自选休息颜色，点一下就用它" />
+        </div>
+        <p class="hint tight">到点时屏幕短暂变成这个颜色，几秒后自动恢复，不打开面板也能察觉</p>
       </section>
 
       <!-- ------------------------------------------------------------ 曲线 -->
@@ -303,7 +313,7 @@
               <tbody>
                 <tr><td>色温</td><td>手动调色温、颜色、亮度，选「应用到」哪几块屏</td></tr>
                 <tr><td>预设</td><td>一键套用常用配色，也能把当前配色存起来</td></tr>
-                <tr><td>20-20-20</td><td>休息倒计时、间隔、跳过、休息时是否调暗</td></tr>
+                <tr><td>20-20-20</td><td>休息倒计时、间隔、跳过、休息时是否调暗与调成什么颜色</td></tr>
                 <tr><td>24 小时曲线</td><td>按钟点或日出日落自动变色，锚点增删与过渡</td></tr>
                 <tr><td>用眼</td><td>今天用了多久、休息几次、最近七天，以及用眼建议</td></tr>
                 <tr><td>逐屏与免打扰</td><td>每块屏单独设，以及什么时候不打扰你</td></tr>
@@ -347,7 +357,8 @@
             <p>这条经验法则是：每连续看近处 <strong>20 分钟</strong>，看 <strong>20 英尺（约 6 米）外</strong>至少 <strong>20 秒</strong>，让睫状肌从近距离调节里松一松。它是缓解视疲劳的习惯，不是治疗近视的方案。</p>
             <ul>
               <li>默认固定 <strong>20 分钟一轮</strong>，在「间隔」里可改成 1–180 分钟。人离开、全屏或演示时只会把到点时间<strong>往后顺延</strong>，回来接着算，不会重置整轮。</li>
-              <li>到点时屏幕会短暂变暖压暗，默认 6 秒后自动恢复，不打开面板也能察觉；旁边的秒数输入框能改成 2–60 秒。横幅上是休息倒数。不想要这个效果，关掉「休息时调暗」，只留横幅。</li>
+              <li>到点时屏幕会短暂变色压暗，默认 6 秒后自动恢复，不打开面板也能察觉；旁边的秒数输入框能改成 2–60 秒。横幅上是休息倒数。不想要这个效果，关掉「休息时调暗」，只留横幅。</li>
+              <li>「休息颜色」决定那一刻屏幕变成什么色：<strong>跟随当前</strong>是在你现在的颜色上再压暖一档；<strong>琥珀 / 暖橙 / 深红</strong>是固定的三档；右边的色块点开可以自己挑任意颜色。不管选哪种，亮度都会跟着压暗，几秒后恢复。</li>
               <li>「跳过这次」把这一轮跳过去。开着「真的停手才记休息」时，休息期间还在敲键鼠，这一次就不计入「休息了几次」。</li>
             </ul>
             <p class="help-note">「休息了几次」只统计护眼开启期间、确实触发过的休息，是全插件里最不精确的一个数，看看趋势就好。</p>

@@ -187,6 +187,7 @@ fn state_payload(state: &AppState) -> Value {
             "restSeconds": cfg.break_plan.rest_seconds,
             "dimScreen": cfg.break_plan.dim_screen,
             "dimSeconds": cfg.break_plan.dim_seconds,
+            "restTint": cfg.break_plan.rest_tint,
             "remainingSeconds": cfg.break_plan.remaining(),
             "resting": rest_active(state),
         },
@@ -641,6 +642,29 @@ pub fn dispatch(
             if let Some(v) = params.get("dimSeconds").and_then(Value::as_u64) {
                 cfg.break_plan.dim_seconds =
                     (v as u32).clamp(model::DIM_SECONDS_MIN, model::DIM_SECONDS_MAX);
+            }
+            // 休息色三项分开解析：界面可能只改其中一项，
+            // 整对象反序列化的话，一个字段不合法就会把另外两个也丢掉
+            if let Some(v) = params.get("restTint") {
+                if let Some(mode) = v.get("mode").and_then(Value::as_str) {
+                    cfg.break_plan.rest_tint.mode = match mode {
+                        "kelvin" => model::RestTintMode::Kelvin,
+                        "rgb" => model::RestTintMode::Rgb,
+                        _ => model::RestTintMode::Auto,
+                    };
+                }
+                if let Some(kelvin) = v.get("kelvin").and_then(Value::as_u64) {
+                    cfg.break_plan.rest_tint.kelvin = (kelvin as u32).clamp(KELVIN_MIN, KELVIN_MAX);
+                }
+                if let Some(items) = v.get("rgb").and_then(Value::as_array) {
+                    if items.len() == 3 {
+                        let mut rgb = [0u8; 3];
+                        for (i, item) in items.iter().enumerate() {
+                            rgb[i] = item.as_u64().unwrap_or(0).min(255) as u8;
+                        }
+                        cfg.break_plan.rest_tint.rgb = rgb;
+                    }
+                }
             }
             if params.get("action").and_then(Value::as_str) == Some("skip") {
                 cfg.break_plan.due_at =
