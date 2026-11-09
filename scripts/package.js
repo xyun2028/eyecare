@@ -71,16 +71,68 @@ function syncLockFile() {
 /// CLI 以 `cargo build --locked` 编译侧车，并在命令行注入 dbx-plugin-sdk 的 patch。
 /// 我们的侧车没用这个 SDK，patch 就成了「未使用」，Cargo 会想改写锁文件而被 --locked 拒绝。
 /// 锁文件里预先记下这条未使用 patch，两边就都能过。
-function ensureUnusedPatch() {
+///
+/// cargo 1.92 起，这条记录还必须带上 patch 的实际路径（`source = "path+file://..."`），
+/// 只写 name / version 三行会被判成「lock 需要更新」。所以这里先探测 SDK 位置再写，
+/// 打包结束再删掉——路径是机器相关的，不能留在仓库里。
+function sdkDir() {
+  const candidates = [];
+
+  if (process.env.DBX_PLUGIN_SDK_ROOT) {
+    candidates.push(
+      path.join(process.env.DBX_PLUGIN_SDK_ROOT, "plugins", "sdk", "rust", "dbx-plugin-sdk")
+    );
+  }
+
+  // CLI 自己的包目录里就带了一份 SDK
+  try {
+    const cliPkg = require.resolve("@dbx-app/plugin-cli/package.json");
+    candidates.push(path.join(path.dirname(cliPkg), "sdk-root", "plugins", "sdk", "rust", "dbx-plugin-sdk"));
+  } catch {
+    // 全局安装的 CLI 不在本项目的解析路径里，下面再用 npm 问一次
+  }
+
+  try {
+    const root = execFileSync("npm", ["root", "-g"], { encoding: "utf8", shell: true }).trim();
+    candidates.push(path.join(root, "@dbx-app", "plugin-cli", "sdk-root", "plugins", "sdk", "rust", "dbx-plugin-sdk"));
+  } catch {
+    // 没有 npm 也不致命，退回旧格式
+  }
+
+  return candidates.find((dir) => fs.existsSync(path.join(dir, "Cargo.toml")));
+}
+
+const PATCH_BLOCK = /\n*\[\[patch\.unused\]\][\s\S]*$/;
+
+function stripUnusedPatch() {
   const lock = path.join(ROOT, "backend", "Cargo.lock");
   const text = fs.readFileSync(lock, "utf8");
-  if (text.includes('name = "dbx-plugin-sdk"')) return;
+  if (!PATCH_BLOCK.test(text)) return;
 
-  fs.writeFileSync(
-    lock,
-    text.trimEnd() + '\n\n[[patch.unused]]\nname = "dbx-plugin-sdk"\nversion = "0.1.0"\n'
-  );
-  console.log("已补 Cargo.lock 的未使用 patch 记录");
+  // 只删末尾那一段，别动上面的 [[package]]
+  fs.writeFileSync(lock, text.replace(PATCH_BLOCK, "\n"));
+}
+
+function ensureUnusedPatch() {
+  const lock = path.join(ROOT, "backend", "Cargo.lock");
+  let text = fs.readFileSync(lock, "utf8");
+
+  // 先清掉上一轮留下的记录，避免版本或路径变了之后重复叠加
+  if (PATCH_BLOCK.test(text)) {
+    text = text.replace(PATCH_BLOCK, "\n");
+  }
+
+  const dir = sdkDir();
+  const source = dir
+    ? `\nsource = "path+file:///${dir.replace(/\\/g, "/").replace(/ /g, "%20")}"`
+    : "";
+
+  text =
+    text.trimEnd() +
+    `\n\n[[patch.unused]]\nname = "dbx-plugin-sdk"\nversion = "0.1.0"${source}\n`;
+
+  fs.writeFileSync(lock, text);
+  console.log(dir ? "已记录未使用的 patch 及路径" : "已记录未使用的 patch（未找到 SDK 路径）");
 }
 
 /// 同一个 target 只留最新的一份；换了版本就把旧版本的包清掉。
@@ -212,4 +264,10 @@ function main() {
   console.log(`          dist/publishers/${manifest.publisher}.json`);
 }
 
-main();
+// 打包临时往 lock 里写的 patch 记录必须清掉：它带着本机路径，不能留在仓库里。
+// 放在 finally 里，中途编译失败也照样清理。
+try {
+  main();
+} finally {
+  stripUnusedPatch();
+}

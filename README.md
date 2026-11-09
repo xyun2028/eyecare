@@ -223,7 +223,9 @@ node scripts/package.js
 脚本做四件事：
 
 1. 保证 `backend/Cargo.lock` 里有 CLI 注入 `dbx-plugin-sdk` patch 所需的记录
-   （我们的侧车没用这个 SDK，patch 属于「未使用」，不记下来 `--locked` 会直接失败）
+   （我们的侧车没用这个 SDK，patch 属于「未使用」，不记下来 `--locked` 会直接失败）。
+   cargo 1.92 起这条记录还得带上 SDK 的实际路径，脚本会自己探测并写入，
+   打完再删掉——路径是机器相关的，不能进仓库
 2. 调 `dbx-plugin package` 出 `.dbxp` 和 artifact，收进 `dist/`
 3. 把本次 target 合并进 `release-candidates.json` 和 `candidates/<id>.json`，
    不覆盖其它平台已经打好的产物
@@ -245,8 +247,8 @@ node scripts/package.js
 产物在 `dist/`：
 
 ```
-com.eyecare.dbx-0.2.2-windows-x64.dbxp              # 安装包
-com.eyecare.dbx-0.2.2-windows-x64.artifact.json     # target / url / sha256 / size
+com.eyecare.dbx-0.2.3-windows-x64.dbxp              # 安装包
+com.eyecare.dbx-0.2.3-windows-x64.artifact.json     # target / url / sha256 / size
 release-candidates.json                             # 挂到 Release，供商店同步流程读取
 candidates/com.eyecare.dbx.json                     # 提给 dbx-store 的候选文件
 publishers/xyun2028.json                            # 提给 dbx-store 的发布者记录
@@ -316,7 +318,7 @@ sha256 长度、产物大小上限），两份上架文件格式不同，所以�
 
 ## 已验证 / 未验证
 
-**验证过的（0.2.2 开发树，含本轮改动）：**
+**验证过的（0.2.3 开发树，含本轮改动）：**
 
 - Windows 实机：握手返回 `protocolVersion` / `capabilities` / `plugin.id+version`
 - Windows 实机：`eyecare/state` 读出两块 1920×1080 显示器、HDR 状态、7 个预设
@@ -360,13 +362,14 @@ sha256 长度、产物大小上限），两份上架文件格式不同，所以�
   关掉重开立刻回到顶部、Esc / 点遮罩 / 两个关闭按钮、点弹框内部不关闭、
   Tab 焦点锁在弹框内、关闭后焦点回到首页按钮；浅色、深色、600px 窄屏三套截图
   检查过，正文可选中复制，没有横向溢出和控制台报错
-- 打包：本轮重新出了 Windows 包 `dist/com.eyecare.dbx-0.2.2-windows-x64.dbxp`
-  （901044 字节，SHA-256 `c25b20cffeb02d9935bfac26dfe4d0e545f11a0cae0b5e549e278d4ff5ae6154`）。
-  包内 `backend.executable` 指向 `bin/windows-x64/`，`manifest.json` 权限仍是
+- 打包：本轮重新出了 Windows 包 `dist/com.eyecare.dbx-0.2.3-windows-x64.dbxp`
+  （905103 字节，SHA-256 `701b919ae371fe21d48e4005e32dc8ff8fbe281036ed5f57aca7ddddcbcdec3a`）。
+  包内 `backend.executable` 指向 `bin/windows-x64/`，`manifest.json` 版本 0.2.3、权限仍是
   `host.workbench` + `host.events`；解开包直接跑里面的 exe 验证过握手、
-  `screens` / `presence` / `insight` / `gammaConflict` 字段、逐屏滤色模式和
-  `break.dimSeconds=6`，关机收尾也会还原屏幕。包内 `ui/index.html` 含「使用说明」按钮、11 章正文和
-  11 个目录项，`ui/style.css` / `ui/app.js` 含弹框样式与交互，整页没有任何外链。
+  `screens` / `presence` / `insight` / `gammaConflict` 字段、逐屏滤色模式、
+  `break.dimSeconds=6` 和新的 `break.restTint`（默认 auto，改色温、改 RGB、非法值回落、
+  越界夹紧、落盘一致），关机收尾也会还原屏幕。包内 `ui/index.html` 含「使用说明」按钮、11 章正文和
+  11 个目录项与「休息颜色」控件，`ui/style.css` / `ui/app.js` 含弹框样式与交互，整页没有任何外链。
   `dist/` 被 `.gitignore` 忽略，产物不进 Git 历史
 
 **没验证的：**
